@@ -410,11 +410,12 @@ export default function Player({
       window.location.protocol === 'file:'
     )
 
-    // O proxy local do Vite (/iptv-proxy) só existe no servidor de desenvolvimento do navegador web.
     // No Electron (PC Desktop) e no Capacitor (Android APK), a conexão de vídeo vai DIRETO ao servidor de IPTV.
+    // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
     let streamUrl = rawUrl
-    if (!Capacitor.isNativePlatform() && !isElectronEnv && import.meta.env.DEV && (streamUrl.startsWith('http://') || streamUrl.startsWith('https://'))) {
-      streamUrl = `/iptv-proxy?url=${encodeURIComponent(streamUrl)}`
+    const proxyEndpoint = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
+    if (!Capacitor.isNativePlatform() && !isElectronEnv && (streamUrl.startsWith('http://') || streamUrl.startsWith('https://'))) {
+      streamUrl = `${proxyEndpoint}?url=${encodeURIComponent(streamUrl)}`
     }
 
     const isHls = (rawUrl.includes('.m3u8') || (isLive && streamAttempt === 'm3u8')) && Hls.isSupported()

@@ -172,17 +172,16 @@ export class XtreamService {
       }
     }
 
-    // 3. Ambiente Web (Navegador com servidor Vite): usa o proxy local para contornar bloqueio de CORS
-    if (import.meta.env.DEV) {
-      try {
-        const proxyUrl = `/iptv-proxy?url=${encodeURIComponent(fullUrl)}`
-        const res = await fetch(proxyUrl)
-        if (res.ok) {
-          return (await res.json()) as T
-        }
-      } catch {
-        // Se não estiver em dev server, tenta fetch direto
+    // 3. Ambiente Web (Navegador Safari / Chrome / Vercel): usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS
+    const proxyBase = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
+    try {
+      const proxyUrl = `${proxyBase}?url=${encodeURIComponent(fullUrl)}`
+      const res = await fetch(proxyUrl)
+      if (res.ok) {
+        return (await res.json()) as T
       }
+    } catch {
+      // Se não houver proxy, tenta fetch direto
     }
 
     const controller = new AbortController()
