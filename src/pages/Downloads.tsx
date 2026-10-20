@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useDownloads } from '../hooks/useDownloads'
 import { usePlayback } from '../context/PlaybackContext'
+import { downloadManager } from '../services/downloadManager'
 import type { DownloadedMedia } from '../services/downloadDb'
 import type { Section } from '../types'
 
@@ -47,6 +48,7 @@ export default function Downloads({ onNavigate }: Props) {
 
   const [selectedSeriesName, setSelectedSeriesName] = useState<string | null>(null)
   const [selectedSeasonFilter, setSelectedSeasonFilter] = useState<number | 'all'>('all')
+  const [playingId, setPlayingId] = useState<string | null>(null)
 
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
 
@@ -62,9 +64,10 @@ export default function Downloads({ onNavigate }: Props) {
     return completedDownloads.filter((d) => d.mediaType === 'movie')
   }, [completedDownloads])
 
+  // Inclui episódios baixados e também em download para que o usuário possa acompanhar o progresso dentro da série
   const seriesEpisodes = useMemo(() => {
-    return completedDownloads.filter((d) => d.mediaType === 'series')
-  }, [completedDownloads])
+    return downloads.filter((d) => d.mediaType === 'series')
+  }, [downloads])
 
   // Agrupa episódios por nome da série
   const seriesGrouped = useMemo(() => {
@@ -107,14 +110,27 @@ export default function Downloads({ onNavigate }: Props) {
     return Object.keys(seasonsOfSelectedSeries).map(Number).sort((a, b) => a - b)
   }, [seasonsOfSelectedSeries])
 
-  const handlePlay = (item: DownloadedMedia) => {
-    if (!item.playUrl) return
-    playLocalMedia({
-      id: item.id,
-      title: item.subtitle ? `${item.seriesName || item.title} - ${item.subtitle}` : item.title,
-      url: item.playUrl,
-      poster: item.posterUrl,
-    })
+  const handlePlay = async (item: DownloadedMedia) => {
+    if (item.status !== 'completed') return
+    try {
+      setPlayingId(item.id)
+      const playableUrl = await downloadManager.getPlayableUrl(item)
+      if (!playableUrl) {
+        alert('Arquivo de vídeo não encontrado. Tente baixar novamente.')
+        return
+      }
+      playLocalMedia({
+        id: item.id,
+        title: item.subtitle ? `${item.seriesName || item.title} - ${item.subtitle}` : item.title,
+        url: playableUrl,
+        poster: item.posterUrl,
+      })
+    } catch (err) {
+      console.error('Erro ao reproduzir mídia offline:', err)
+      alert('Não foi possível carregar a mídia offline.')
+    } finally {
+      setPlayingId(null)
+    }
   }
 
   const handleDeleteAllSeriesEpisodes = async (seriesName: string) => {
@@ -391,56 +407,139 @@ export default function Downloads({ onNavigate }: Props) {
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {seasonEps.map((ep) => (
-                        <div
-                          key={ep.id}
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handlePlay(ep)
-                          }}
-                          className="flex items-center justify-between gap-3 bg-zinc-950/60 border border-white/5 rounded-2xl p-3.5 hover:border-rose-500/40 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500 transition group"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <button
-                              type="button"
-                              tabIndex={-1}
-                              onClick={() => handlePlay(ep)}
-                              className="w-9 h-9 rounded-full bg-rose-600/20 text-rose-500 group-hover:bg-rose-600 group-hover:text-white transition flex items-center justify-center shrink-0 cursor-pointer shadow"
-                            >
-                              <Play size={14} className="ml-0.5 fill-current" />
-                            </button>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-zinc-200 truncate group-hover:text-rose-400 transition">
-                                {ep.subtitle || `Episódio ${ep.episodeNumber || 1}`}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 pt-0.5">
-                                {ep.duration > 0 && `${formatDuration(ep.duration)} • `}
-                                {formatBytes(ep.totalBytes)}
-                              </p>
+                      {seasonEps.map((ep) => {
+                        const isDownloading = ep.status === 'downloading'
+                        const isQueued = ep.status === 'queued'
+                        const isCompleted = ep.status === 'completed'
+                        const isPlaying = playingId === ep.id
+
+                        return (
+                          <div
+                            key={ep.id}
+                            tabIndex={isCompleted ? 0 : -1}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && isCompleted) handlePlay(ep)
+                            }}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-950/60 border rounded-2xl p-3.5 transition group ${
+                              isDownloading
+                                ? 'border-rose-500/50 shadow-md shadow-rose-950/20'
+                                : isQueued
+                                ? 'border-amber-500/30'
+                                : 'border-white/5 hover:border-rose-500/40 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              {isCompleted ? (
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={() => handlePlay(ep)}
+                                  disabled={isPlaying}
+                                  className="w-9 h-9 rounded-full bg-rose-600/20 text-rose-500 group-hover:bg-rose-600 group-hover:text-white transition flex items-center justify-center shrink-0 cursor-pointer shadow"
+                                >
+                                  {isPlaying ? (
+                                    <Loader2 size={15} className="animate-spin text-rose-500" />
+                                  ) : (
+                                    <Play size={14} className="ml-0.5 fill-current" />
+                                  )}
+                                </button>
+                              ) : isDownloading ? (
+                                <div className="w-9 h-9 rounded-full bg-rose-600/20 text-rose-400 flex items-center justify-center shrink-0">
+                                  <Loader2 size={16} className="animate-spin text-rose-500" />
+                                </div>
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                                  <Clock size={16} />
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-bold text-zinc-200 truncate group-hover:text-rose-400 transition">
+                                    {ep.subtitle || `Episódio ${ep.episodeNumber || 1}`}
+                                  </p>
+                                  {isDownloading && (
+                                    <span className="text-[10px] font-extrabold text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-800 shrink-0">
+                                      {ep.progress}%
+                                    </span>
+                                  )}
+                                  {isQueued && (
+                                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded-full border border-amber-800 shrink-0">
+                                      Na fila
+                                    </span>
+                                  )}
+                                </div>
+
+                                {isDownloading ? (
+                                  <div className="space-y-1 pt-1.5 w-full max-w-md">
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                                      <span className="text-rose-400 font-semibold">Baixando arquivo...</span>
+                                      <span>
+                                        {ep.totalBytes > 0
+                                          ? `${formatBytes(ep.downloadedBytes)} / ${formatBytes(ep.totalBytes)}`
+                                          : ep.downloadedBytes > 0
+                                          ? `${formatBytes(ep.downloadedBytes)} baixados`
+                                          : ''}
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                      <div
+                                        style={{ width: `${ep.progress}%` }}
+                                        className="h-full bg-gradient-to-r from-rose-600 to-rose-400 transition-all duration-300 rounded-full"
+                                      />
+                                    </div>
+                                  </div>
+                                ) : isQueued ? (
+                                  <p className="text-[10px] text-amber-400/80 pt-0.5">
+                                    Aguardando download anterior terminar...
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-zinc-500 pt-0.5">
+                                    {ep.duration > 0 && `${formatDuration(ep.duration)} • `}
+                                    {formatBytes(ep.totalBytes)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                              {isCompleted ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    tabIndex={0}
+                                    onClick={() => handlePlay(ep)}
+                                    disabled={isPlaying}
+                                    className="text-xs font-bold text-rose-500 hover:text-rose-400 px-2.5 py-1 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                                  >
+                                    {isPlaying ? 'Carregando...' : 'Assistir'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    tabIndex={0}
+                                    onClick={() => remove(ep.id)}
+                                    className="text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                    title="Excluir episódio"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  tabIndex={0}
+                                  onClick={() => cancel(ep.id)}
+                                  className="flex items-center gap-1 text-xs font-bold text-zinc-400 hover:text-rose-400 px-2.5 py-1 rounded-lg hover:bg-white/5 border border-white/10 hover:border-rose-500/30 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                  title="Cancelar download"
+                                >
+                                  <X size={13} />
+                                  <span>Cancelar</span>
+                                </button>
+                              )}
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              tabIndex={0}
-                              onClick={() => handlePlay(ep)}
-                              className="text-xs font-bold text-rose-500 hover:text-rose-400 px-2 py-1 rounded hover:bg-white/5 transition cursor-pointer"
-                            >
-                              Assistir
-                            </button>
-                            <button
-                              type="button"
-                              tabIndex={0}
-                              onClick={() => remove(ep.id)}
-                              className="text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
-                              title="Excluir episódio"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )
@@ -594,10 +693,24 @@ export default function Downloads({ onNavigate }: Props) {
                         </div>
 
                         {/* Badge de Quantidade de Episódios Baixados */}
-                        <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-md rounded-full px-2 py-0.5 flex items-center gap-1 text-[10px] text-white font-bold border border-white/20">
-                          <Layers size={10} className="text-rose-400" />
-                          <span>{episodes.length} {episodes.length === 1 ? 'ep' : 'eps'}</span>
-                        </div>
+                        {(() => {
+                          const completedCount = episodes.filter((e) => e.status === 'completed').length
+                          const downloadingCount = episodes.filter((e) => e.status === 'downloading' || e.status === 'queued').length
+                          if (downloadingCount > 0) {
+                            return (
+                              <div className="absolute top-2 right-2 bg-black/85 backdrop-blur-md rounded-full px-2 py-0.5 flex items-center gap-1 text-[10px] text-rose-400 font-bold border border-rose-500/40 shadow">
+                                <Loader2 size={10} className="animate-spin text-rose-400" />
+                                <span>{downloadingCount} baixando</span>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-md rounded-full px-2 py-0.5 flex items-center gap-1 text-[10px] text-white font-bold border border-white/20">
+                              <Layers size={10} className="text-rose-400" />
+                              <span>{completedCount} {completedCount === 1 ? 'ep' : 'eps'}</span>
+                            </div>
+                          )
+                        })()}
                       </div>
 
                       {/* Informações da Série */}
@@ -606,9 +719,16 @@ export default function Downloads({ onNavigate }: Props) {
                           <h3 className="text-xs font-bold text-zinc-200 line-clamp-1 group-hover:text-rose-400 transition">
                             {seriesName}
                           </h3>
-                          <p className="text-[10px] text-zinc-400 pt-0.5">
-                            {episodes.length} {episodes.length === 1 ? 'episódio baixado' : 'episódios baixados'}
-                          </p>
+                          {(() => {
+                            const completedCount = episodes.filter((e) => e.status === 'completed').length
+                            const downloadingCount = episodes.filter((e) => e.status === 'downloading' || e.status === 'queued').length
+                            return (
+                              <p className="text-[10px] text-zinc-400 pt-0.5">
+                                {completedCount > 0 && `${completedCount} ${completedCount === 1 ? 'episódio baixado' : 'episódios baixados'}`}
+                                {downloadingCount > 0 && ` (${downloadingCount} em download)`}
+                              </p>
+                            )
+                          })()}
                         </div>
 
                         <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] text-zinc-500">

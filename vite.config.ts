@@ -50,6 +50,7 @@ function iptvDevProxy(): Plugin {
                 res.statusCode = proxyRes.statusCode || 200
                 res.setHeader('Access-Control-Allow-Origin', '*')
                 res.setHeader('Access-Control-Allow-Headers', '*')
+                res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
                 res.setHeader('Accept-Ranges', 'bytes')
 
                 const contentType = proxyRes.headers['content-type'] || 'application/json'

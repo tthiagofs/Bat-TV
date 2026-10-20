@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Capacitor } from '@capacitor/core'
 import { X, Play, Plus, ThumbsUp, ThumbsDown, Star, Loader2, Check, Film, Tv, ChevronRight, Download, CheckCircle2, AlertCircle } from 'lucide-react'
 import {
   getMediaDetails,
@@ -319,7 +320,8 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
         return
       }
 
-      const remoteUrl = service.vodUrl(targetItem.id, targetItem.ext || 'mp4')
+      const preferredExt = (!Capacitor.isNativePlatform() && !window.electronAPI) ? 'mp4' : (targetItem.ext || 'mp4')
+      const remoteUrl = service.vodUrl(targetItem.id, preferredExt)
       const res = await startDownload({
         id: movieDownloadId,
         mediaType: 'movie',
@@ -371,7 +373,8 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
         return
       }
 
-      const remoteUrl = service.episodeUrl(String(rawEp.id), rawEp.container_extension || 'mp4')
+      const preferredExt = (!Capacitor.isNativePlatform() && !window.electronAPI) ? 'mp4' : (rawEp.container_extension || 'mp4')
+      const remoteUrl = service.episodeUrl(String(rawEp.id), preferredExt)
       await startDownload({
         id: epId,
         mediaType: 'series',
@@ -678,6 +681,7 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
                       const activeEpDownloadId = getEpisodeDownloadId(activeEpisode.episodeNumber)
                       const isActDownloaded = isDownloaded(activeEpDownloadId)
                       const isActDownloading = isDownloading(activeEpDownloadId)
+                      const actStatus = getStatus(activeEpDownloadId)
                       return (
                         <button
                           type="button"
@@ -700,7 +704,7 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
                           ) : isActDownloading ? (
                             <>
                               <Loader2 size={14} className="animate-spin text-rose-400" />
-                              <span>Baixando</span>
+                              <span>Baixando ({actStatus?.progress || 0}%)</span>
                             </>
                           ) : (
                             <>
@@ -799,47 +803,54 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
                               {ep.episodeNumber}. {ep.name}
                             </p>
 
-                            <button
-                              type="button"
-                              tabIndex={0}
-                              data-tv-episode-download="true"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDownloadEpisode(ep)
-                              }}
-                              disabled={isEpDownloaded || isEpDownloading}
-                              className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold border transition cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500 ${
-                                isEpDownloaded
-                                  ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30'
-                                  : isEpDownloading
-                                  ? 'bg-rose-950/60 text-rose-300 border-rose-500/50 animate-pulse'
-                                  : 'bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white border-white/10'
-                              }`}
-                              title={
-                                isEpDownloaded
-                                  ? 'Episódio já baixado'
-                                  : isEpDownloading
-                                  ? 'Baixando episódio...'
-                                  : `Baixar Episódio ${ep.episodeNumber}`
-                              }
-                            >
-                              {isEpDownloaded ? (
-                                <>
-                                  <CheckCircle2 size={13} className="text-emerald-400" />
-                                  <span>Baixado</span>
-                                </>
-                              ) : isEpDownloading ? (
-                                <>
-                                  <Loader2 size={13} className="animate-spin text-rose-400" />
-                                  <span>Baixando...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download size={13} />
-                                  <span>Baixar Ep. {ep.episodeNumber}</span>
-                                </>
-                              )}
-                            </button>
+                            {(() => {
+                              const isEpDownloaded = isDownloaded(epDownloadId)
+                              const isEpDownloading = isDownloading(epDownloadId)
+                              const epStatus = getStatus(epDownloadId)
+                              return (
+                                <button
+                                  type="button"
+                                  tabIndex={0}
+                                  data-tv-episode-download="true"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDownloadEpisode(ep)
+                                  }}
+                                  disabled={isEpDownloaded || isEpDownloading}
+                                  className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-bold border transition cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500 ${
+                                    isEpDownloaded
+                                      ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30'
+                                      : isEpDownloading
+                                      ? 'bg-rose-950/60 text-rose-300 border-rose-500/50'
+                                      : 'bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white border-white/10'
+                                  }`}
+                                  title={
+                                    isEpDownloaded
+                                      ? 'Episódio já baixado'
+                                      : isEpDownloading
+                                      ? `Baixando episódio (${epStatus?.progress || 0}%)...`
+                                      : `Baixar Episódio ${ep.episodeNumber}`
+                                  }
+                                >
+                                  {isEpDownloaded ? (
+                                    <>
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      <span>Baixado</span>
+                                    </>
+                                  ) : isEpDownloading ? (
+                                    <>
+                                      <Loader2 size={13} className="animate-spin text-rose-400" />
+                                      <span>Baixando ({epStatus?.progress || 0}%)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download size={13} />
+                                      <span>Baixar Ep. {ep.episodeNumber}</span>
+                                    </>
+                                  )}
+                                </button>
+                              )
+                            })()}
                           </div>
                         </div>
                       )

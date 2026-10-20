@@ -8,6 +8,8 @@ import {
   markDownloadCompleted,
   markDownloadError,
   deleteDownloadRecord,
+  saveMediaBlob,
+  getMediaBlob,
   type DownloadedMedia,
 } from './downloadDb'
 
@@ -40,6 +42,8 @@ class DownloadManager {
   private isProcessing = false
   private listeners: Set<DownloadListener> = new Set()
   private cleanupElectronListeners: (() => void)[] = []
+  private webAbortControllers: Map<string, AbortController> = new Map()
+  private activeBlobUrls: Map<string, string> = new Map()
 
   constructor() {
     this.setupListeners()
@@ -283,26 +287,155 @@ class DownloadManager {
       return
     }
 
-    // Plataforma 3: Web Browser simulado (Dev environment)
+    // Plataforma 3: Web Browser (Safari iOS / Chrome / PWA / Vercel)
     try {
-      await upsertDownload({ ...item, status: 'downloading' })
+      await upsertDownload({ ...item, status: 'downloading', progress: 0, downloadedBytes: 0 })
       this.notify()
-      let simulatedPercent = 0
-      const timer = setInterval(async () => {
-        simulatedPercent += 15
-        if (simulatedPercent >= 100) {
-          clearInterval(timer)
-          await markDownloadCompleted(item.id, 'local-storage://simulated', item.remoteUrl, 1024 * 1024 * 250)
-          this.isProcessing = false
-          this.notify()
-          this.processQueue()
-        } else {
-          await updateDownloadProgress(item.id, simulatedPercent, simulatedPercent * 2.5 * 1024 * 1024, 250 * 1024 * 1024)
+
+      const abortController = new AbortController()
+      this.webAbortControllers.set(item.id, abortController)
+      const signal = abortController.signal
+
+      // Se for Web / iOS, sempre prefere container MP4 (Xtream faz remux automático e Safari suporta 100%)
+      const targetUrl = item.remoteUrl.replace(/\.mkv$/i, '.mp4')
+      const proxyEndpoint = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
+      const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(targetUrl)}`
+
+      // 1. Tenta descobrir o tamanho total do arquivo
+      let totalBytes = item.totalBytes || 0
+      let supportsRange = false
+
+      try {
+        const probeRes = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: { Range: 'bytes=0-1023' },
+          signal,
+        })
+
+        if (probeRes.status === 206) {
+          supportsRange = true
+          const contentRange = probeRes.headers.get('content-range')
+          if (contentRange) {
+            const match = contentRange.match(/\/(\d+)$/)
+            if (match && match[1]) {
+              totalBytes = parseInt(match[1], 10)
+            }
+          }
+        } else if (probeRes.ok) {
+          const cl = probeRes.headers.get('content-length')
+          if (cl) totalBytes = parseInt(cl, 10)
+        }
+      } catch (e: any) {
+        if (e.name === 'AbortError') throw e
+      }
+
+      const chunks: BlobPart[] = []
+      let receivedBytes = 0
+
+      // Se o servidor suporta Range e temos o tamanho total, baixa em fatias seguras de 4MB
+      // Isso evita timeout no Vercel Serverless Function e permite download resiliente
+      const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB
+
+      if (supportsRange && totalBytes > 0) {
+        let start = 0
+        while (start < totalBytes) {
+          if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+
+          const end = Math.min(start + CHUNK_SIZE - 1, totalBytes - 1)
+          let chunkSuccess = false
+          let lastErr: any = null
+
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
+            try {
+              const chunkRes = await fetch(proxyUrl, {
+                headers: { Range: `bytes=${start}-${end}` },
+                signal,
+              })
+
+              if (!chunkRes.ok && chunkRes.status !== 206) {
+                throw new Error(`HTTP ${chunkRes.status} na fatia ${start}-${end}`)
+              }
+
+              const buffer = await chunkRes.arrayBuffer()
+              chunks.push(buffer)
+              receivedBytes += buffer.byteLength
+              chunkSuccess = true
+              break
+            } catch (err: any) {
+              if (err.name === 'AbortError') throw err
+              lastErr = err
+              await new Promise((r) => setTimeout(r, 800))
+            }
+          }
+
+          if (!chunkSuccess) {
+            throw lastErr || new Error(`Falha ao descarregar bloco ${start}-${end}`)
+          }
+
+          start = end + 1
+          const percent = Math.min(99, Math.round((receivedBytes / totalBytes) * 100))
+          await updateDownloadProgress(item.id, percent, receivedBytes, totalBytes)
           this.notify()
         }
-      }, 500)
+      } else {
+        // Fallback: Streaming contínuo via ReadableStream caso o servidor não suporte Range
+        const streamRes = await fetch(proxyUrl, { signal })
+        if (!streamRes.ok) {
+          throw new Error(`Erro na conexão com servidor: HTTP ${streamRes.status}`)
+        }
+
+        const cl = streamRes.headers.get('content-length')
+        if (cl && !totalBytes) totalBytes = parseInt(cl, 10)
+
+        if (!streamRes.body) {
+          throw new Error('Navegador não forneceu stream de download')
+        }
+
+        const reader = streamRes.body.getReader()
+        let lastNotify = Date.now()
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            chunks.push(value)
+            receivedBytes += value.length
+
+            const now = Date.now()
+            if (now - lastNotify > 300) {
+              lastNotify = now
+              const percent = totalBytes > 0 ? Math.min(99, Math.round((receivedBytes / totalBytes) * 100)) : 0
+              await updateDownloadProgress(item.id, percent, receivedBytes, totalBytes)
+              this.notify()
+            }
+          }
+        }
+      }
+
+      // Cria Blob com formato MP4 compatível com Safari iOS e Chrome
+      const blob = new Blob(chunks, { type: 'video/mp4' })
+      const finalSize = blob.size || receivedBytes
+
+      // Grava no IndexedDB local do dispositivo
+      await saveMediaBlob(item.id, blob)
+
+      const localPath = `indexeddb://${item.id}`
+      const playUrl = `blob-store://${item.id}`
+
+      await markDownloadCompleted(item.id, localPath, playUrl, finalSize)
+      this.webAbortControllers.delete(item.id)
+      this.isProcessing = false
+      this.notify()
+      this.processQueue()
     } catch (err: any) {
-      await markDownloadError(item.id, err?.message || 'Erro')
+      this.webAbortControllers.delete(item.id)
+      if (err.name === 'AbortError') {
+        console.log('Download cancelado:', item.id)
+      } else {
+        console.error('Erro no download web:', err)
+        await markDownloadError(item.id, err?.message || 'Falha ao baixar mídia')
+      }
       this.isProcessing = false
       this.notify()
       this.processQueue()
@@ -310,6 +443,13 @@ class DownloadManager {
   }
 
   public async cancelDownload(id: string): Promise<void> {
+    const controller = this.webAbortControllers.get(id)
+    if (controller) {
+      try {
+        controller.abort()
+      } catch {}
+      this.webAbortControllers.delete(id)
+    }
     if (window.electronAPI?.cancelDownload) {
       await window.electronAPI.cancelDownload(id)
     }
@@ -323,6 +463,20 @@ class DownloadManager {
   }
 
   public async deleteDownload(id: string): Promise<void> {
+    const controller = this.webAbortControllers.get(id)
+    if (controller) {
+      try {
+        controller.abort()
+      } catch {}
+      this.webAbortControllers.delete(id)
+    }
+
+    const cachedBlobUrl = this.activeBlobUrls.get(id)
+    if (cachedBlobUrl) {
+      URL.revokeObjectURL(cachedBlobUrl)
+      this.activeBlobUrls.delete(id)
+    }
+
     const item = await getDownload(id)
     if (!item) return
 
@@ -341,6 +495,29 @@ class DownloadManager {
 
     await deleteDownloadRecord(id)
     this.notify()
+  }
+
+  public async getPlayableUrl(item: DownloadedMedia): Promise<string> {
+    // 1. Se for mídia salva no IndexedDB (Web / PWA)
+    if (item.playUrl?.startsWith('blob-store://') || item.localPath?.startsWith('indexeddb://')) {
+      if (this.activeBlobUrls.has(item.id)) {
+        return this.activeBlobUrls.get(item.id)!
+      }
+      const blob = await getMediaBlob(item.id)
+      if (blob) {
+        const blobUrl = URL.createObjectURL(blob)
+        this.activeBlobUrls.set(item.id, blobUrl)
+        return blobUrl
+      }
+    }
+
+    // 2. Se for arquivo nativo no Capacitor ou Electron
+    if (item.playUrl && !item.playUrl.startsWith('blob-store://') && item.playUrl !== 'local-storage://simulated') {
+      return item.playUrl
+    }
+
+    // 3. Fallback para URL remota se houver internet
+    return item.remoteUrl
   }
 }
 

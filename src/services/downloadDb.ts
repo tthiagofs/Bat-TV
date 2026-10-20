@@ -21,8 +21,9 @@ export interface DownloadedMedia {
 }
 
 const DB_NAME = 'bat-tv-downloads-db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'downloads'
+const BLOB_STORE_NAME = 'media_blobs'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -39,6 +40,9 @@ function getDb(): Promise<IDBDatabase> {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' })
         store.createIndex('status', 'status', { unique: false })
         store.createIndex('createdAt', 'createdAt', { unique: false })
+      }
+      if (!db.objectStoreNames.contains(BLOB_STORE_NAME)) {
+        db.createObjectStore(BLOB_STORE_NAME, { keyPath: 'id' })
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -133,7 +137,54 @@ export async function markDownloadError(id: string, error: string): Promise<void
   await upsertDownload(item)
 }
 
+export async function saveMediaBlob(id: string, blob: Blob): Promise<void> {
+  const db = await getDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(BLOB_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(BLOB_STORE_NAME)
+    const req = store.put({ id, blob, size: blob.size, updatedAt: Date.now() })
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}
+
+export async function getMediaBlob(id: string): Promise<Blob | null> {
+  try {
+    const db = await getDb()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BLOB_STORE_NAME, 'readonly')
+      const store = tx.objectStore(BLOB_STORE_NAME)
+      const req = store.get(id)
+      req.onsuccess = () => {
+        const record = req.result
+        if (record && record.blob) {
+          resolve(record.blob)
+        } else {
+          resolve(null)
+        }
+      }
+      req.onerror = () => reject(req.error)
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function deleteMediaBlob(id: string): Promise<void> {
+  try {
+    const db = await getDb()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BLOB_STORE_NAME, 'readwrite')
+      const store = tx.objectStore(BLOB_STORE_NAME)
+      const req = store.delete(id)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+  } catch {}
+}
+
 export async function deleteDownloadRecord(id: string): Promise<void> {
+  await deleteMediaBlob(id).catch(() => {})
   const db = await getDb()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
