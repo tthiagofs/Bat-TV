@@ -1,4 +1,4 @@
-import { Home, Film, Tv, Trophy } from 'lucide-react'
+import { Home, Tv, Film, Clapperboard, Trophy } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import type { Section } from '../../types'
@@ -18,6 +18,11 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
       icon: Home,
     },
     {
+      id: 'live' as const,
+      label: 'TV Ao Vivo',
+      icon: Tv,
+    },
+    {
       id: 'movies' as const,
       label: 'Filmes',
       icon: Film,
@@ -25,7 +30,7 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
     {
       id: 'series' as const,
       label: 'Séries',
-      icon: Tv,
+      icon: Clapperboard,
     },
     {
       id: 'sports' as const,
@@ -34,14 +39,14 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
     },
     {
       id: 'my-netflix' as const,
-      label: profile?.name ? profile.name.slice(0, 8) : 'Meu Perfil',
+      label: profile?.name ? profile.name.slice(0, 8) : 'Perfil',
       isProfile: true,
     },
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-lg border-t border-white/10 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5 px-2">
-      <div className="flex items-center justify-around max-w-lg mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-lg border-t border-white/10 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5 px-1 sm:px-2">
+      <div className="flex items-center justify-between max-w-md mx-auto">
         {navItems.map((item) => {
           const isActive = activeSection === item.id
           const Icon = item.icon
@@ -51,17 +56,17 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
               <button
                 key={item.id}
                 onClick={() => onSelectSection(item.id)}
-                className="flex flex-col items-center gap-1 py-1 px-2 transition active:scale-95 focus:outline-none cursor-pointer touch-manipulation"
+                className="flex-1 flex flex-col items-center gap-0.5 sm:gap-1 py-1 px-0.5 sm:px-1 transition active:scale-95 focus:outline-none cursor-pointer touch-manipulation"
               >
                 <div
-                  className={`w-6 h-6 rounded-md overflow-hidden transition-all flex items-center justify-center ${
+                  className={`w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md overflow-hidden transition-all flex items-center justify-center ${
                     isActive ? 'ring-2 ring-rose-500 scale-105 shadow-md' : 'opacity-75'
                   }`}
                 >
-                  <Avatar id={profile?.avatar || DEFAULT_AVATAR} size={24} className="w-full h-full rounded-md" />
+                  <Avatar id={profile?.avatar || DEFAULT_AVATAR} size={22} className="w-full h-full rounded-md" />
                 </div>
                 <span
-                  className={`text-[10px] font-medium tracking-tight ${
+                  className={`text-[9px] sm:text-[10px] font-medium tracking-tight truncate max-w-[54px] ${
                     isActive ? 'text-white font-bold' : 'text-zinc-400'
                   }`}
                 >
@@ -75,18 +80,18 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
             <button
               key={item.id}
               onClick={() => onSelectSection(item.id)}
-              className="flex flex-col items-center gap-1 py-1 px-2 transition active:scale-95 focus:outline-none cursor-pointer"
+              className="flex-1 flex flex-col items-center gap-0.5 sm:gap-1 py-1 px-0.5 sm:px-1 transition active:scale-95 focus:outline-none cursor-pointer touch-manipulation"
             >
               {Icon && (
                 <Icon
-                  size={20}
-                  className={`transition-colors ${
-                    isActive ? 'text-rose-500' : 'text-zinc-400'
+                  size={19}
+                  className={`transition-colors shrink-0 ${
+                    isActive ? 'text-rose-500 scale-105' : 'text-zinc-400'
                   }`}
                 />
               )}
               <span
-                className={`text-[10px] font-medium tracking-tight ${
+                className={`text-[9px] sm:text-[10px] font-medium tracking-tight truncate max-w-[54px] ${
                   isActive ? 'text-white font-bold' : 'text-zinc-400'
                 }`}
               >

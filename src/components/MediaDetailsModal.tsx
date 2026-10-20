@@ -405,7 +405,7 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
         {/* Botão de Fechar Proeminente */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-black/80 hover:bg-rose-600 text-white border border-white/20 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none touch-manipulation"
+          className="absolute top-6 right-5 sm:top-5 sm:right-6 z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none touch-manipulation"
           title="Fechar detalhes (Esc)"
           aria-label="Fechar"
         >

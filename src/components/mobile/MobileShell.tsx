@@ -77,7 +77,7 @@ export default function MobileShell() {
               )}
 
               {section === 'live' && (
-                <div className="flex-1 min-h-0 flex flex-col pb-20">
+                <div className="flex-1 min-h-0 flex flex-col pb-20 pt-[max(env(safe-area-inset-top),3.5rem)]">
                   <Browse section="live" query="" />
                 </div>
               )}

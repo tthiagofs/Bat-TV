@@ -53,29 +53,32 @@ function buildHlsConfig(isLive: boolean): Partial<Hls['config']> {
   if (isLive) {
     return {
       lowLatencyMode: false,
-      maxBufferLength: 8,
-      maxMaxBufferLength: 12,
-      maxBufferSize: 20 * 1000 * 1000, // 20 MB max para não esgotar RAM no Android 9
-      backBufferLength: 4,
-      liveSyncDuration: 8,
-      liveMaxLatencyDuration: 14,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 40,
+      maxBufferSize: 30 * 1000 * 1000,
+      backBufferLength: 8,
+      liveSyncDurationCount: 3,
+      liveMaxLatencyDurationCount: 8,
       maxLiveSyncPlaybackRate: 1.0,
-      enableWorker: false, // Desativa Web Workers para compatibilidade e estabilidade no Android 9
-      manifestLoadingTimeOut: 12000,
-      manifestLoadingMaxRetry: 2,
-      levelLoadingTimeOut: 12000,
-      levelLoadingMaxRetry: 2,
-      fragLoadingTimeOut: 15000,
-      fragLoadingMaxRetry: 3,
+      enableWorker: false,
+      manifestLoadingTimeOut: 15000,
+      manifestLoadingMaxRetry: 4,
+      levelLoadingTimeOut: 15000,
+      levelLoadingMaxRetry: 4,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 5,
     }
   }
   return {
     lowLatencyMode: false,
-    maxBufferLength: 15,
-    maxMaxBufferLength: 30,
-    maxBufferSize: 30 * 1000 * 1000, // 30 MB max para filmes/séries
-    backBufferLength: 10,
+    maxBufferLength: 25,
+    maxMaxBufferLength: 50,
+    maxBufferSize: 50 * 1000 * 1000,
+    backBufferLength: 15,
     enableWorker: false,
+    manifestLoadingTimeOut: 15000,
+    fragLoadingTimeOut: 25000,
+    fragLoadingMaxRetry: 4,
   }
 }
 
@@ -190,6 +193,12 @@ export default function Player({
   const [isDraggingProgress, setIsDraggingProgress] = useState(false)
   const [dragProgressVal, setDragProgressVal] = useState<number | null>(null)
 
+  // Detecta se está rodando no ambiente desktop Electron (pacote PC instalado ou executável)
+  const isElectronEnv = typeof window !== 'undefined' && (
+    window.navigator.userAgent.toLowerCase().includes('electron') ||
+    window.location.protocol === 'file:'
+  )
+
   useEffect(() => {
     const handleOrientation = () => {
       const mobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
@@ -221,13 +230,34 @@ export default function Player({
 
   const isRotatedLandscape = isMobileDevice && isPortrait && forceLandscape
 
-  const wake = useCallback(() => {
-    setShowControls(true)
+  const resetHideTimer = useCallback(() => {
     window.clearTimeout(hideTimer.current)
     hideTimer.current = window.setTimeout(() => {
       // Se algum menu/gaveta de seleção estiver aberto, não oculta os controles
       setShowControls((prev) => (showQuickZap || showQualityMenu || showAudioSubMenu ? true : false))
     }, 4500)
+  }, [showQuickZap, showQualityMenu, showAudioSubMenu])
+
+  const wake = useCallback(() => {
+    setShowControls(true)
+    resetHideTimer()
+  }, [resetHideTimer])
+
+  // Toque/Clique na tela: se fechado, abre e permanece por 4.5s; se aberto, fecha imediatamente
+  const toggleControlsViaTap = useCallback((e?: React.SyntheticEvent) => {
+    if (e) {
+      e.stopPropagation()
+    }
+    window.clearTimeout(hideTimer.current)
+    setShowControls((prev) => {
+      const next = !prev
+      if (next) {
+        hideTimer.current = window.setTimeout(() => {
+          setShowControls((cur) => (showQuickZap || showQualityMenu || showAudioSubMenu ? true : false))
+        }, 4500)
+      }
+      return next
+    })
   }, [showQuickZap, showQualityMenu, showAudioSubMenu])
 
   const [time, setTime] = useState({ current: 0, duration: 0 })
@@ -448,12 +478,6 @@ export default function Player({
       }
     }
 
-    // Detecta se está rodando no ambiente desktop Electron (pacote PC instalado ou executável)
-    const isElectronEnv = typeof window !== 'undefined' && (
-      window.navigator.userAgent.toLowerCase().includes('electron') ||
-      window.location.protocol === 'file:'
-    )
-
     // No Electron (PC Desktop) e no Capacitor (Android APK), a conexão de vídeo vai DIRETO ao servidor de IPTV.
     // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
     let streamUrl = rawUrl
@@ -568,15 +592,44 @@ export default function Player({
   }, [volume, muted, isNative])
 
   const toggleFullscreen = useCallback(() => {
-    const v = videoRef.current as any
+    // 1. Se o navegador já estiver em modo tela cheia nativo, sai
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {})
-    } else if (containerRef.current?.requestFullscreen) {
-      containerRef.current.requestFullscreen().catch(() => {})
-    } else if (v && v.webkitEnterFullscreen) {
-      v.webkitEnterFullscreen()
+      return
     }
-  }, [])
+
+    // 2. No Mobile em modo Portrait:
+    // O player já está em tela cheia na horizontal simulada com 100dvh x 100dvw.
+    // No iOS Safari (iPhone), chamar webkitEnterFullscreen() abre o QuickTime em vertical e quebra o app.
+    if (isMobileDevice && isPortrait) {
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current
+          .requestFullscreen()
+          .then(() => {
+            try {
+              if (screen.orientation && 'lock' in screen.orientation) {
+                ;(screen.orientation as any).lock('landscape').catch(() => {})
+              }
+            } catch {}
+          })
+          .catch(() => {})
+      } else {
+        // No iPhone, assegura que o modo tela cheia horizontal customizado fique ativo
+        setForceLandscape(true)
+      }
+      return
+    }
+
+    // 3. Em Desktop ou quando o aparelho já está fisicamente deitado (Landscape):
+    if (containerRef.current?.requestFullscreen) {
+      containerRef.current.requestFullscreen().catch(() => {})
+    } else {
+      const v = videoRef.current as any
+      if (v && v.webkitEnterFullscreen) {
+        v.webkitEnterFullscreen()
+      }
+    }
+  }, [isMobileDevice, isPortrait])
 
   const togglePlay = useCallback(() => {
     if (isNative) {
@@ -1186,7 +1239,7 @@ export default function Player({
     <div
       data-tv-player="true"
       ref={containerRef}
-      onMouseMove={wake}
+      onMouseMove={isMobileDevice ? undefined : wake}
       onWheel={(e) => setVolume((v) => Math.min(1, Math.max(0, +(v + (e.deltaY < 0 ? 0.05 : -0.05)).toFixed(2))))}
       style={
         isRotatedLandscape
@@ -1210,16 +1263,14 @@ export default function Player({
           ref={videoRef}
           playsInline
           {...{ 'webkit-playsinline': 'true' }}
-          onClick={() => setShowControls((prev) => !prev)}
-          onDoubleClick={toggleFullscreen}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onWaiting={() => setBuffering(true)}
           onPlaying={() => setBuffering(false)}
           onCanPlay={() => setBuffering(false)}
           onError={(e) => {
-            if (isLive && streamAttempt === 'm3u8') {
-              console.warn('Tag video falhou com m3u8, tentando TS...')
+            if (isLive && streamAttempt === 'm3u8' && (Capacitor.isNativePlatform() || isElectronEnv)) {
+              console.warn('Tag video falhou com m3u8, tentando TS no player nativo...')
               setStreamAttempt('ts')
               return
             }
@@ -1246,8 +1297,16 @@ export default function Player({
         />
       )}
 
+      {/* Camada de Toque Transparente para Exibir/Ocultar Controles com Duração Garantida de 4.5s */}
+      <div
+        id="player-touch-surface"
+        onClick={toggleControlsViaTap}
+        onDoubleClick={toggleFullscreen}
+        className="absolute inset-0 z-10 cursor-pointer touch-manipulation"
+      />
+
       {buffering && !error && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
           <Loader2 size={48} className="animate-spin text-white/80" />
         </div>
       )}
@@ -1296,7 +1355,7 @@ export default function Player({
       )}
 
       {osd && channelLabel && (
-        <div className="absolute top-20 right-8 px-4 py-2 rounded-lg bg-black/70 text-lg font-semibold fade-up">
+        <div className="absolute top-20 right-8 px-4 py-2 rounded-lg bg-black/70 text-lg font-semibold fade-up z-20">
           {channelLabel}
           {current && <div className="text-sm font-normal text-zinc-300 mt-0.5">{current.title}</div>}
         </div>
@@ -1312,8 +1371,8 @@ export default function Player({
         }}
         className="fixed z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 shadow-2xl backdrop-blur-md active:scale-90 transition cursor-pointer touch-manipulation"
         style={{
-          top: 'max(env(safe-area-inset-top, 0px), 14px)',
-          left: 'max(env(safe-area-inset-left, 0px), 14px)',
+          top: isRotatedLandscape ? '1.5rem' : 'max(env(safe-area-inset-top, 0px), 1rem)',
+          left: isRotatedLandscape ? 'max(env(safe-area-inset-top, 0px), 4.5rem)' : 'max(env(safe-area-inset-left, 0px), 1.25rem)',
         }}
         title="Fechar e Voltar"
         aria-label="Fechar"
@@ -1322,7 +1381,18 @@ export default function Player({
       </button>
 
       {/* Barra superior */}
-      <div className={`absolute top-0 inset-x-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-6 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2 sm:pb-4 pl-[max(env(safe-area-inset-left,0px),3.5rem)] sm:pl-6 bg-gradient-to-b from-black/85 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div
+        className={`absolute top-0 inset-x-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-6 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2 sm:pb-4 bg-gradient-to-b from-black/85 to-transparent transition-opacity duration-300 z-30 ${
+          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{
+          paddingLeft: isRotatedLandscape ? 'max(env(safe-area-inset-top, 0px), 7.5rem)' : 'max(env(safe-area-inset-left, 0px), 4rem)',
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          resetHideTimer()
+        }}
+      >
         <button id="player-close" onClick={onClose} className={btn} aria-label="Fechar (Esc)" title="Fechar (Esc)">
           <X size={20} className="sm:w-[22px] sm:h-[22px]" />
         </button>
@@ -1346,7 +1416,23 @@ export default function Player({
       </div>
 
       {/* Controles inferiores */}
-      <div className={`absolute bottom-0 inset-x-0 px-3 sm:px-6 pb-[max(env(safe-area-inset-bottom,0px),1rem)] pt-6 sm:pt-10 bg-gradient-to-t from-black/95 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div
+        className={`absolute bottom-0 inset-x-0 px-3 sm:px-6 pb-[max(env(safe-area-inset-bottom,0px),1rem)] pt-6 sm:pt-10 bg-gradient-to-t from-black/95 to-transparent transition-opacity duration-300 z-30 ${
+          showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        style={
+          isRotatedLandscape
+            ? {
+                paddingLeft: 'max(env(safe-area-inset-top, 0px), 4rem)',
+                paddingRight: 'max(env(safe-area-inset-bottom, 0px), 2.5rem)',
+              }
+            : undefined
+        }
+        onClick={(e) => {
+          e.stopPropagation()
+          resetHideTimer()
+        }}
+      >
         {isLive && epg.length > 0 && (
           <div className="mb-2 max-w-xl text-xs sm:text-sm">
             {current && (
@@ -1783,9 +1869,9 @@ export default function Player({
       </>
     )}
 
-      {/* Botão Flutuante de Pular Abertura (+30s) - Versão Compacta Mobile */}
+      {/* Botão Flutuante de Pular Abertura (+30s) - Versão Compacta Mobile Elevada Acima da Barra */}
       {isSeries && showFloatingSkip && (
-        <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 transition-all duration-300 select-none">
+        <div className="absolute bottom-28 right-4 sm:bottom-32 sm:right-8 z-40 transition-all duration-300 select-none">
           <button
             id="player-skip-intro-floating-btn"
             tabIndex={0}
@@ -1803,7 +1889,7 @@ export default function Player({
 
       {/* 1. Popup de Próximo Episódio aos 40 segundos restantes (duração de 10s com auto-foco) */}
       {isSeries && onNextEpisode && showPrompt40s && nextEpCountdown === null && (
-        <div className="absolute bottom-24 right-8 z-40 transition-all duration-300 fade-up max-w-sm bg-zinc-950/95 border border-zinc-700/80 p-4 rounded-2xl shadow-2xl backdrop-blur-md space-y-3 select-none">
+        <div className="absolute bottom-28 right-4 sm:bottom-32 sm:right-8 z-40 transition-all duration-300 fade-up max-w-sm bg-zinc-950/95 border border-zinc-700/80 p-4 rounded-2xl shadow-2xl backdrop-blur-md space-y-3 select-none">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Próximo Episódio</span>
             <span className="px-2 py-0.5 rounded-full bg-white/10 text-zinc-300 text-[10px] font-bold">
@@ -1842,7 +1928,7 @@ export default function Player({
 
       {/* 2. Contagem regressiva de 5 segundos para passar automaticamente */}
       {isSeries && onNextEpisode && nextEpCountdown !== null && !autoNextCancelled && (
-        <div className="absolute bottom-24 right-8 z-40 transition-all duration-300 fade-up max-w-sm bg-zinc-950/95 border border-zinc-700/80 p-4 rounded-2xl shadow-2xl backdrop-blur-md space-y-3 select-none">
+        <div className="absolute bottom-28 right-4 sm:bottom-32 sm:right-8 z-40 transition-all duration-300 fade-up max-w-sm bg-zinc-950/95 border border-zinc-700/80 p-4 rounded-2xl shadow-2xl backdrop-blur-md space-y-3 select-none">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400">Próximo Episódio</span>
             <span className="px-2.5 py-0.5 rounded-full bg-rose-600 text-white text-xs font-black tabular-nums animate-pulse">

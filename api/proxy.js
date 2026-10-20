@@ -1,6 +1,9 @@
 import http from 'node:http'
 import https from 'node:https'
 
+const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 50, timeout: 20000 })
+const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 50, timeout: 20000 })
+
 export default function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -28,6 +31,7 @@ export default function handler(req, res) {
     try {
       const parsed = new URL(targetUrl)
       const client = parsed.protocol === 'https:' ? https : http
+      const agent = parsed.protocol === 'https:' ? agentHttps : agentHttp
       const headers = {
         'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
         Accept: '*/*',
@@ -39,7 +43,7 @@ export default function handler(req, res) {
 
       const proxyReq = client.get(
         targetUrl,
-        { headers },
+        { headers, agent },
         (proxyRes) => {
           if (
             [301, 302, 307, 308].includes(proxyRes.statusCode || 0) &&
@@ -106,25 +110,42 @@ export default function handler(req, res) {
                 .join('\n')
 
               res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+              res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
               res.setHeader('Content-Length', Buffer.byteLength(rewritten, 'utf-8'))
               res.end(rewritten)
             })
             return
           }
 
+          if (targetUrl.includes('.ts')) {
+            res.setHeader('Cache-Control', 'public, max-age=3600')
+          }
           proxyRes.pipe(res)
         }
       )
 
+      proxyReq.setTimeout(25000, () => {
+        proxyReq.destroy()
+        if (!res.headersSent) {
+          res.statusCode = 504
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.end(JSON.stringify({ error: 'Tempo limite esgotado no servidor IPTV' }))
+        }
+      })
+
       proxyReq.on('error', (err) => {
-        res.statusCode = 500
-        res.setHeader('Access-Control-Allow-Origin', '*')
-        res.end(JSON.stringify({ error: err.message }))
+        if (!res.headersSent) {
+          res.statusCode = 500
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.end(JSON.stringify({ error: err.message }))
+        }
       })
     } catch (e) {
-      res.statusCode = 500
-      res.setHeader('Access-Control-Allow-Origin', '*')
-      res.end(JSON.stringify({ error: e.message }))
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        res.end(JSON.stringify({ error: e.message }))
+      }
     }
   }
 
