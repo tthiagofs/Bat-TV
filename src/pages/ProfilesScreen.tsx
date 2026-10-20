@@ -88,29 +88,29 @@ export default function ProfilesScreen() {
   const selectedClub = clubByKey(newTeam || undefined)
 
   return (
-    <div className="fixed inset-0 z-40 bg-gradient-to-b from-zinc-950 via-zinc-900 to-black flex flex-col items-center justify-center p-6 select-none overflow-y-auto">
+    <div className="fixed inset-0 z-40 bg-gradient-to-b from-zinc-950 via-zinc-900 to-black flex flex-col items-center justify-start sm:justify-center p-4 sm:p-6 pt-12 sm:pt-6 select-none overflow-y-auto min-h-[100dvh]">
       {/* Background glow suave */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-rose-600/10 blur-[140px] pointer-events-none rounded-full" />
 
-      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center">
+      <div className="relative z-10 w-full max-w-4xl flex flex-col items-center my-auto">
         {/* Logo Oficial BAT TV */}
-        <div className="mb-6 flex flex-col items-center">
+        <div className="mb-4 sm:mb-6 flex flex-col items-center">
           <img
             src={batLogo}
             alt="BAT TV"
-            className="h-20 w-auto object-contain drop-shadow-2xl hover:scale-105 transition-transform"
+            className="h-16 sm:h-20 w-auto object-contain drop-shadow-2xl hover:scale-105 transition-transform"
           />
         </div>
 
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-zinc-100 mb-2 text-center">
+        <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-100 mb-2 text-center">
           {managing ? 'Gerenciar Perfis' : 'Quem está assistindo?'}
         </h1>
-        <p className="text-sm text-zinc-400 mb-10 text-center">
+        <p className="text-xs sm:text-sm text-zinc-400 mb-6 sm:mb-10 text-center max-w-xs sm:max-w-md">
           {managing ? 'Selecione um perfil para alterar foto, nome, PIN ou time' : 'Escolha seu perfil para acessar seus favoritos, histórico e recomendações'}
         </p>
 
         {/* Grade de Perfis */}
-        <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 max-w-3xl mb-12">
+        <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8 max-w-3xl mb-8 sm:mb-12">
           {profiles.map((p, idx) => {
             return (
               <button
@@ -119,7 +119,7 @@ export default function ProfilesScreen() {
                 autoFocus={idx === 0}
                 key={p.id}
                 onClick={() => handleProfileClick(p)}
-                className="group flex flex-col items-center gap-3 cursor-pointer transition-transform hover:-translate-y-1.5 focus:-translate-y-2 focus:scale-105 focus:outline-none"
+                className="group flex flex-col items-center gap-2.5 sm:gap-3 cursor-pointer transition-transform active:scale-95 hover:-translate-y-1.5 focus:-translate-y-2 focus:scale-105 focus:outline-none touch-manipulation"
               >
                 <div className="relative">
                   <div className={`p-1 rounded-2xl transition border-2 ${

@@ -246,7 +246,7 @@ export const DEFAULT_AVATAR = 'naruto:naruto'
 export const avatarById = (id: string) => ALL.find((a) => a.id === id)
 
 interface AvatarProps {
-  id: string
+  id?: string | null
   size?: number
   className?: string
 }
@@ -256,12 +256,13 @@ export function Avatar({ id, size = 96, className = '' }: AvatarProps) {
   const [useFallback, setUseFallback] = useState(false)
 
   const style = { width: size, height: size }
+  const safeId = (typeof id === 'string' && id.trim()) ? id : DEFAULT_AVATAR
 
   // Imagem enviada pelo usuário (data: base64 ou URL customizada)
-  if (id.startsWith('data:') || id.startsWith('http://') || id.startsWith('https://')) {
+  if (safeId.startsWith('data:') || safeId.startsWith('http://') || safeId.startsWith('https://')) {
     return (
       <img
-        src={id}
+        src={safeId}
         alt="Avatar"
         referrerPolicy="no-referrer"
         style={style}
@@ -273,7 +274,13 @@ export function Avatar({ id, size = 96, className = '' }: AvatarProps) {
     )
   }
 
-  const def = avatarById(id) ?? avatarById(DEFAULT_AVATAR)!
+  const def = avatarById(safeId) ?? avatarById(DEFAULT_AVATAR) ?? {
+    id: DEFAULT_AVATAR,
+    label: 'Usuário',
+    imageUrl: 'https://s4.anilist.co/file/anilistcdn/character/large/b17-phjcWCkRuIhu.png',
+    c1: '#f97316',
+    c2: '#1e3a8a',
+  }
 
   if (def.isClub) {
     return (

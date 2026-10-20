@@ -177,6 +177,48 @@ export default function Player({
   const [fullscreen, setFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
 
+  // Detecção de Mobile e Orientação da Tela para Auto-Landscape
+  const [isMobileDevice, setIsMobileDevice] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  })
+  const [isPortrait, setIsPortrait] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerHeight > window.innerWidth
+  })
+  const [forceLandscape, setForceLandscape] = useState(true)
+
+  useEffect(() => {
+    const handleOrientation = () => {
+      const mobile = window.innerWidth <= 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      setIsMobileDevice(mobile)
+      setIsPortrait(window.innerHeight > window.innerWidth)
+    }
+
+    window.addEventListener('resize', handleOrientation)
+    window.addEventListener('orientationchange', handleOrientation)
+
+    // Tenta forçar landscape nativo se a Screen Orientation API for suportada
+    try {
+      if (screen.orientation && 'lock' in screen.orientation) {
+        ;(screen.orientation as any).lock('landscape').catch(() => {})
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener('resize', handleOrientation)
+      window.removeEventListener('orientationchange', handleOrientation)
+      // Destrava a orientação e restaura portrait ao fechar o player
+      try {
+        if (screen.orientation && 'unlock' in screen.orientation) {
+          ;(screen.orientation as any).unlock()
+        }
+      } catch {}
+    }
+  }, [])
+
+  const isRotatedLandscape = isMobileDevice && isPortrait && forceLandscape
+
   const wake = useCallback(() => {
     setShowControls(true)
     window.clearTimeout(hideTimer.current)
@@ -1117,7 +1159,7 @@ export default function Player({
   }, [url, channelLabel])
 
   const VolIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
-  const btn = 'p-2 rounded-full hover:bg-white/15 focus:bg-white/25 focus:ring-4 focus:ring-rose-500 focus:outline-none transition cursor-pointer'
+  const btn = 'p-1.5 sm:p-2 rounded-full hover:bg-white/15 focus:bg-white/25 focus:ring-4 focus:ring-rose-500 focus:outline-none transition cursor-pointer'
 
   return (
     <div
@@ -1125,7 +1167,21 @@ export default function Player({
       ref={containerRef}
       onMouseMove={wake}
       onWheel={(e) => setVolume((v) => Math.min(1, Math.max(0, +(v + (e.deltaY < 0 ? 0.05 : -0.05)).toFixed(2))))}
-      className={`fixed inset-0 z-50 ${isNative ? 'bg-transparent' : 'bg-black'} select-none ${showControls ? '' : 'cursor-none'}`}
+      style={
+        isRotatedLandscape
+          ? {
+              width: '100dvh',
+              height: '100dvw',
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%) rotate(90deg)',
+              transformOrigin: 'center center',
+              zIndex: 9999,
+            }
+          : undefined
+      }
+      className={`fixed inset-0 z-50 ${isNative ? 'bg-transparent' : 'bg-black'} select-none ${showControls ? '' : 'cursor-none'} touch-manipulation`}
     >
 
       {!isNative && (
@@ -1224,47 +1280,58 @@ export default function Player({
       )}
 
       {/* Barra superior */}
-      <div className={`absolute top-0 inset-x-0 flex items-center gap-3 px-6 py-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`absolute top-0 inset-x-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-4 bg-gradient-to-b from-black/85 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button id="player-close" onClick={onClose} className={btn} aria-label="Fechar (Esc)" title="Fechar (Esc)">
-          <X size={22} />
+          <X size={20} className="sm:w-[22px] sm:h-[22px]" />
         </button>
-        <h2 className="font-semibold truncate">{title}</h2>
+        <h2 className="font-semibold text-xs sm:text-base truncate flex-1">{title}</h2>
         {isLive && (
-          <span className="ml-2 flex items-center gap-1 text-xs font-bold bg-rose-600 px-2 py-0.5 rounded">
-            <Radio size={12} /> AO VIVO
+          <span className="flex items-center gap-1 text-[10px] sm:text-xs font-bold bg-rose-600 px-2 py-0.5 rounded shrink-0">
+            <Radio size={11} /> AO VIVO
           </span>
+        )}
+        {/* Botão de Girar Orientação (Mobile) */}
+        {isMobileDevice && (
+          <button
+            onClick={() => setForceLandscape((prev) => !prev)}
+            className={btn}
+            title={forceLandscape ? 'Modo Normal' : 'Girar Horizontal'}
+            aria-label="Girar orientação"
+          >
+            <RotateCcw size={18} className={forceLandscape ? 'rotate-90 text-rose-400' : 'text-zinc-300'} />
+          </button>
         )}
       </div>
 
       {/* Controles inferiores */}
-      <div className={`absolute bottom-0 inset-x-0 px-6 pb-4 pt-10 bg-gradient-to-t from-black/90 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-0 inset-x-0 px-3 sm:px-6 pb-2.5 sm:pb-4 pt-6 sm:pt-10 bg-gradient-to-t from-black/95 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         {isLive && epg.length > 0 && (
-          <div className="mb-3 max-w-2xl text-sm">
+          <div className="mb-2 max-w-xl text-xs sm:text-sm">
             {current && (
               <div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xs font-bold text-rose-400">AGORA</span>
-                  <span className="font-semibold truncate">{current.title}</span>
-                  <span className="text-xs text-zinc-400 shrink-0">{hhmm(current.start)} – {hhmm(current.end)}</span>
+                  <span className="text-[10px] sm:text-xs font-bold text-rose-400">AGORA</span>
+                  <span className="font-semibold truncate text-xs sm:text-sm">{current.title}</span>
+                  <span className="text-[10px] sm:text-xs text-zinc-400 shrink-0">{hhmm(current.start)} – {hhmm(current.end)}</span>
                 </div>
                 <div className="mt-1 h-1 rounded bg-white/20 overflow-hidden">
                   <div className="h-full bg-rose-500" style={{ width: `${Math.min(100, Math.max(0, ((nowSec - current.start) / (current.end - current.start)) * 100))}%` }} />
                 </div>
-                {current.description && <p className="mt-1 text-xs text-zinc-400 line-clamp-2">{current.description}</p>}
+                {current.description && <p className="mt-0.5 text-[11px] text-zinc-400 line-clamp-1">{current.description}</p>}
               </div>
             )}
-            {upcoming.map((e) => (
-              <div key={e.start} className="mt-1.5 flex items-baseline gap-2 text-zinc-300">
-                <span className="text-xs font-bold text-zinc-500">DEPOIS</span>
-                <span className="truncate">{e.title}</span>
-                <span className="text-xs text-zinc-500 shrink-0">{hhmm(e.start)}</span>
+            {upcoming.slice(0, 1).map((e) => (
+              <div key={e.start} className="mt-1 flex items-baseline gap-2 text-zinc-300 hidden sm:flex">
+                <span className="text-[10px] sm:text-xs font-bold text-zinc-500">DEPOIS</span>
+                <span className="truncate text-xs">{e.title}</span>
+                <span className="text-[10px] sm:text-xs text-zinc-500 shrink-0">{hhmm(e.start)}</span>
               </div>
             ))}
           </div>
         )}
         {!isLive && (
-          <div className="flex items-center gap-3 mb-2 text-xs text-zinc-300">
-            <span className="w-14 text-right tabular-nums font-semibold">{fmt(time.current)}</span>
+          <div className="flex items-center gap-2 sm:gap-3 mb-1.5 text-[11px] sm:text-xs text-zinc-300">
+            <span className="w-10 sm:w-14 text-right tabular-nums font-semibold">{fmt(time.current)}</span>
             <input
               id="player-progress"
               tabIndex={0}
@@ -1291,18 +1358,18 @@ export default function Player({
                   seekRelative(10)
                 }
               }}
-              className="flex-1 accent-rose-500 cursor-pointer h-2.5 rounded-lg bg-zinc-700 focus:ring-4 focus:ring-rose-500 focus:outline-none focus:scale-y-125 transition-all"
+              className="flex-1 accent-rose-500 cursor-pointer h-2 sm:h-2.5 rounded-lg bg-zinc-700 focus:ring-4 focus:ring-rose-500 focus:outline-none transition-all"
               aria-label="Progresso do vídeo"
             />
-            <span className="w-14 tabular-nums font-semibold">{fmt(time.duration)}</span>
+            <span className="w-10 sm:w-14 tabular-nums font-semibold">{fmt(time.duration)}</span>
           </div>
         )}
-        <div id="player-bottom-controls" className="flex items-center gap-2">
+        <div id="player-bottom-controls" className="flex items-center gap-1.5 sm:gap-2">
           <button id="player-play" tabIndex={0} onClick={togglePlay} className={btn} aria-label="Play/Pause (Espaço)" title="Play/Pause (Espaço)">
-            {playing ? <Pause size={22} /> : <Play size={22} />}
+            {playing ? <Pause size={20} className="sm:w-[22px] sm:h-[22px]" /> : <Play size={20} className="sm:w-[22px] sm:h-[22px]" />}
           </button>
           <button id="player-mute" tabIndex={0} onClick={() => setMuted((m) => !m)} className={btn} aria-label="Mudo (M)" title="Mudo (M)">
-            <VolIcon size={22} />
+            <VolIcon size={20} className="sm:w-[22px] sm:h-[22px]" />
           </button>
           <input
             id="player-volume"
@@ -1314,7 +1381,7 @@ export default function Player({
             data-tv-ignore="true"
             value={muted ? 0 : volume}
             onChange={(e) => { setVolume(Number(e.target.value)); setMuted(false) }}
-            className="w-28 accent-rose-500"
+            className="w-20 sm:w-28 accent-rose-500 hidden sm:block"
             aria-label="Volume"
           />
           <div className="flex-1" />
@@ -1323,11 +1390,11 @@ export default function Player({
               id="player-skip-intro-bar-btn"
               tabIndex={0}
               onClick={handleSkipIntro}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 focus:bg-rose-600 focus:text-white focus:ring-4 focus:ring-rose-500 focus:outline-none text-xs font-bold text-zinc-200 hover:text-white transition cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/10 hover:bg-white/20 focus:bg-rose-600 focus:text-white focus:ring-2 focus:ring-rose-500 focus:outline-none text-[11px] sm:text-xs font-bold text-zinc-200 hover:text-white transition cursor-pointer shrink-0"
               title="Pular Abertura (+30s)"
             >
-              <FastForward size={14} className="text-rose-400" />
-              <span>Pular Abertura (+30s)</span>
+              <FastForward size={13} className="text-rose-400" />
+              <span>+30s</span>
             </button>
           )}
           {isSeries && onNextEpisode && (
@@ -1335,11 +1402,11 @@ export default function Player({
               id="player-next-episode-bar-btn"
               tabIndex={0}
               onClick={handlePlayNextEpisode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 focus:bg-rose-600 focus:text-white focus:ring-4 focus:ring-rose-500 focus:outline-none text-xs font-bold text-zinc-200 hover:text-white transition cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/10 hover:bg-white/20 focus:bg-rose-600 focus:text-white focus:ring-2 focus:ring-rose-500 focus:outline-none text-[11px] sm:text-xs font-bold text-zinc-200 hover:text-white transition cursor-pointer shrink-0"
               title="Próximo Episódio (N)"
             >
-              <SkipForward size={14} className="text-rose-400" />
-              <span>Próximo Episódio</span>
+              <SkipForward size={13} className="text-rose-400" />
+              <span className="hidden sm:inline">Próximo</span>
             </button>
           )}
           {/* Seletor de Qualidade de Canal e HLS (FHD, HD, SD, 4K) */}
@@ -1557,20 +1624,20 @@ export default function Player({
                 NativePlayer.setResizeMode({ mode: next }).catch(() => {})
               }
             }}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm hover:bg-white/15 focus:bg-white/25 focus:ring-4 focus:ring-rose-500 focus:outline-none transition cursor-pointer"
+            className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm hover:bg-white/15 focus:bg-white/25 focus:ring-2 focus:ring-rose-500 focus:outline-none transition cursor-pointer shrink-0"
             title="Proporção (A)"
           >
-            <RectangleHorizontal size={18} /> {aspect === 'contain' ? '16:9' : 'Preencher'}
+            <RectangleHorizontal size={16} /> <span className="hidden sm:inline">{aspect === 'contain' ? '16:9' : 'Preencher'}</span>
           </button>
           <button id="player-fullscreen" tabIndex={0} onClick={toggleFullscreen} className={btn} aria-label="Tela cheia (F)" title="Tela cheia (F)">
-            {fullscreen ? <Minimize size={22} /> : <Maximize size={22} />}
+            {fullscreen ? <Minimize size={20} className="sm:w-[22px] sm:h-[22px]" /> : <Maximize size={20} className="sm:w-[22px] sm:h-[22px]" />}
           </button>
         </div>
       </div>
 
       {/* Gaveta Lateral Translúcida do Quick Zap (Mini-EPG / Zapear rápido) */}
       {isLive && showQuickZap && channelsList.length > 0 && (
-        <div className="absolute inset-y-0 left-0 w-80 sm:w-96 bg-zinc-950/95 backdrop-blur-xl border-r border-white/15 z-50 flex flex-col shadow-2xl fade-up select-none">
+        <div className="absolute inset-y-0 left-0 w-72 sm:w-96 max-w-[85vw] bg-zinc-950/95 backdrop-blur-xl border-r border-white/15 z-50 flex flex-col shadow-2xl fade-up select-none">
           {/* Topo do Quick Zap */}
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2">

@@ -1,5 +1,7 @@
 import { Search, Cast, User } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
+import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
+import batLogo from '../../assets/logo.png'
 import type { Section } from '../../types'
 
 interface Props {
@@ -20,20 +22,24 @@ export default function MobileTopBar({
   const { active: profile } = useProfiles()
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-gradient-to-b from-black/90 via-black/60 to-transparent pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 px-4 transition-all">
-      {/* Linha Superior: Logo + Ações */}
+    <header className="sticky top-0 z-40 w-full bg-gradient-to-b from-black/95 via-black/75 to-transparent pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 px-4 transition-all">
+      {/* Linha Superior: Logo Oficial + Ações */}
       <div className="flex items-center justify-between h-12">
         <div className="flex items-center gap-2">
           <button
             onClick={() => onSelectSection('home')}
-            className="flex items-center gap-1.5 focus:outline-none"
+            className="flex items-center gap-1.5 focus:outline-none cursor-pointer active:scale-95 transition"
+            aria-label="BAT TV Início"
           >
-            <span className="text-rose-600 font-black text-2xl tracking-tighter">BAT</span>
-            <span className="text-white font-extrabold text-lg tracking-wider">TV</span>
+            <img
+              src={batLogo}
+              alt="BAT TV"
+              className="h-8 w-auto max-w-[120px] object-contain drop-shadow-md"
+            />
           </button>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* Botão de Busca */}
           <div className="relative flex items-center">
             {search ? (
@@ -43,12 +49,12 @@ export default function MobileTopBar({
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Buscar filmes, séries..."
                 autoFocus
-                className="w-48 bg-zinc-900/90 text-white text-xs rounded-full pl-8 pr-3 py-1.5 border border-white/20 focus:outline-none focus:border-rose-500"
+                className="w-44 sm:w-52 bg-zinc-900/90 text-white text-xs rounded-full pl-8 pr-3 py-1.5 border border-white/20 focus:outline-none focus:border-rose-500"
               />
             ) : null}
             <button
               onClick={() => onSearchChange(search ? '' : ' ')}
-              className="p-1.5 rounded-full text-zinc-300 hover:text-white transition cursor-pointer"
+              className="p-1.5 rounded-full text-zinc-300 hover:text-white transition cursor-pointer active:scale-90"
               aria-label="Buscar"
             >
               <Search size={20} />
@@ -58,13 +64,10 @@ export default function MobileTopBar({
           {/* Avatar do Perfil */}
           <button
             onClick={onOpenProfile}
-            className="relative w-8 h-8 rounded-md overflow-hidden ring-1 ring-white/20 active:scale-95 transition cursor-pointer flex items-center justify-center bg-zinc-800"
+            className="relative w-8 h-8 rounded-lg overflow-hidden ring-1 ring-white/30 active:scale-90 transition cursor-pointer flex items-center justify-center bg-zinc-800 shadow"
+            aria-label="Meu Perfil"
           >
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-            ) : (
-              <User size={16} className="text-zinc-300" />
-            )}
+            <Avatar id={profile?.avatar || DEFAULT_AVATAR} size={32} className="w-full h-full rounded-lg" />
           </button>
         </div>
       </div>

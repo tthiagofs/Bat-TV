@@ -3,6 +3,7 @@ import {
   MAX_PROFILES, checkPin, emptyProfile, hashPin, loadDb, pushHistory, pushSearch, saveDb, takeLegacyFavorites,
   type HistoryEntry, type Profile, type ProfileDb,
 } from '../services/profileDb'
+import { DEFAULT_AVATAR } from '../data/avatars'
 import type { MediaItem } from '../types'
 
 interface ProfileInput {
@@ -38,9 +39,28 @@ interface ProfileContextValue extends Actions {
 const Ctx = createContext<ProfileContextValue | null>(null)
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<ProfileDb>(loadDb)
-  // O perfil ativo vale só para a sessão: ao abrir o app aparece "Quem está assistindo?"
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [db, setDb] = useState<ProfileDb>(() => {
+    const loaded = loadDb()
+    if (loaded.profiles.length === 0) {
+      const defaultProf = emptyProfile('Principal', DEFAULT_AVATAR)
+      const seeded: ProfileDb = { version: 1, profiles: [defaultProf] }
+      saveDb(seeded)
+      return seeded
+    }
+    return loaded
+  })
+
+  // Restaura o perfil ativo salvo no navegador para não travar em tela preta ao reabrir
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    try {
+      const currentDb = loadDb()
+      const saved = localStorage.getItem('iptv-rea:active-profile-id')
+      if (saved && currentDb.profiles.some((p) => p.id === saved)) return saved
+      if (currentDb.profiles.length === 1 && !currentDb.profiles[0].pinHash) return currentDb.profiles[0].id
+      if (currentDb.profiles.length > 0 && !currentDb.profiles[0].pinHash) return currentDb.profiles[0].id
+    } catch {}
+    return null
+  })
 
   const dbRef = useRef(db)
   const activeRef = useRef(activeId)
@@ -59,8 +79,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (activeRef.current) patchProfile(activeRef.current, fn)
     }
     return {
-      select: setActiveId,
-      leave: () => setActiveId(null),
+      select: (id) => {
+        try { localStorage.setItem('iptv-rea:active-profile-id', id) } catch {}
+        setActiveId(id)
+      },
+      leave: () => {
+        try { localStorage.removeItem('iptv-rea:active-profile-id') } catch {}
+        setActiveId(null)
+      },
       verifyPin: async (id, pin) => {
         const p = dbRef.current.profiles.find((x) => x.id === id)
         return p ? checkPin(p, pin) : false

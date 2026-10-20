@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useDownloads } from '../../hooks/useDownloads'
 import { useFavorites } from '../../context/FavoritesContext'
 import { usePlayback } from '../../context/PlaybackContext'
+import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import type { Section, MediaItem } from '../../types'
 
 interface Props {
@@ -30,14 +31,10 @@ export default function MobileMyProfile({
       <div className="flex flex-col items-center justify-center pt-4 pb-2">
         <button
           onClick={leave}
-          className="relative group active:scale-95 transition cursor-pointer"
+          className="relative group active:scale-95 transition cursor-pointer touch-manipulation"
         >
-          <div className="w-20 h-20 rounded-xl overflow-hidden ring-2 ring-rose-500 shadow-xl bg-zinc-800 flex items-center justify-center">
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-3xl">😊</span>
-            )}
+          <div className="w-20 h-20 rounded-2xl overflow-hidden ring-2 ring-rose-500 shadow-xl bg-zinc-800 flex items-center justify-center">
+            <Avatar id={profile?.avatar || DEFAULT_AVATAR} size={80} className="w-full h-full rounded-2xl" />
           </div>
           <span className="absolute -bottom-2 -right-2 bg-zinc-900 border border-white/20 rounded-full p-1 text-xs">
             ⇄

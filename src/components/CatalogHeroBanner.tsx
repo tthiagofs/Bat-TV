@@ -36,6 +36,10 @@ export default function CatalogHeroBanner({
   const trailerTimerRef = useRef<number | null>(null)
   const trailerEndRef = useRef<number | null>(null)
 
+  // Suporte a swipe de toque em celulares
+  const touchStartX = useRef<number | null>(null)
+  const touchEndX = useRef<number | null>(null)
+
   const current = items[currentIdx]
   const trailerId = current ? `hero-${current.id}` : undefined
 
@@ -268,7 +272,23 @@ export default function CatalogHeroBanner({
           handlePlayNow()
         }
       }}
-      className={`relative w-full shrink-0 h-[500px] sm:h-[560px] lg:h-[620px] overflow-hidden bg-zinc-950 select-none group focus:outline-none transition-all duration-300 ${
+      onTouchStart={(e) => {
+        touchStartX.current = e.targetTouches[0].clientX
+        touchEndX.current = null
+      }}
+      onTouchMove={(e) => {
+        touchEndX.current = e.targetTouches[0].clientX
+      }}
+      onTouchEnd={() => {
+        if (touchStartX.current === null || touchEndX.current === null) return
+        const diff = touchStartX.current - touchEndX.current
+        if (diff > 45) {
+          nextSlide()
+        } else if (diff < -45) {
+          prevSlide()
+        }
+      }}
+      className={`relative w-full shrink-0 h-[440px] sm:h-[560px] lg:h-[620px] overflow-hidden bg-zinc-950 select-none group focus:outline-none transition-all duration-300 touch-pan-y ${
         isBannerFocused ? 'ring-4 ring-inset ring-rose-500 shadow-[inset_0_0_80px_rgba(244,63,94,0.45)]' : ''
       }`}
     >
@@ -343,17 +363,17 @@ export default function CatalogHeroBanner({
       <div className="absolute inset-y-0 left-0 w-full sm:w-[75%] lg:w-[60%] bg-gradient-to-r from-zinc-950 via-zinc-950/85 via-50% to-transparent pointer-events-none z-[2]" />
       <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-zinc-950/90 via-zinc-950/40 to-transparent pointer-events-none z-[2]" />
 
-      {/* Setas de navegação no hover (Apenas Mouse / Desktop) */}
+      {/* Setas de navegação (Toque fácil no mobile e hover no desktop) */}
       <button
         type="button"
         tabIndex={-1}
         data-tv-ignore="true"
         aria-hidden="true"
         onClick={prevSlide}
-        className="absolute left-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition duration-300 shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer"
+        className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition duration-300 shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer touch-manipulation active:scale-90"
         aria-label="Anterior"
       >
-        <ChevronLeft size={28} />
+        <ChevronLeft size={22} className="sm:w-7 sm:h-7" />
       </button>
       <button
         type="button"
@@ -361,53 +381,53 @@ export default function CatalogHeroBanner({
         data-tv-ignore="true"
         aria-hidden="true"
         onClick={nextSlide}
-        className="absolute right-6 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition duration-300 shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer"
+        className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-3 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition duration-300 shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer touch-manipulation active:scale-90"
         aria-label="Próximo"
       >
-        <ChevronRight size={28} />
+        <ChevronRight size={22} className="sm:w-7 sm:h-7" />
       </button>
 
       {/* Conteúdo do Destaque */}
-      <div className="relative z-10 h-full flex flex-col justify-end px-8 sm:px-14 lg:px-16 pt-24 pb-14 sm:pb-16 max-w-3xl space-y-4">
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className="px-3 py-1 rounded-md bg-rose-600 text-white font-black text-[11px] tracking-wider uppercase shadow-lg flex items-center gap-1.5">
-            <Sparkles size={13} />
+      <div className="relative z-10 h-full flex flex-col justify-end px-4 sm:px-14 lg:px-16 pt-16 sm:pt-24 pb-8 sm:pb-16 max-w-3xl space-y-3 sm:space-y-4">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-md bg-rose-600 text-white font-black text-[10px] sm:text-[11px] tracking-wider uppercase shadow-lg flex items-center gap-1.5">
+            <Sparkles size={12} />
             {currentBadge}
           </span>
-          <div className="flex items-center gap-1.5 text-amber-400 font-extrabold text-xs bg-black/60 px-2.5 py-1 rounded-md backdrop-blur-md border border-white/10">
-            <Star size={13} className="fill-amber-400" />
+          <div className="flex items-center gap-1 text-amber-400 font-extrabold text-[11px] sm:text-xs bg-black/60 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md backdrop-blur-md border border-white/10">
+            <Star size={12} className="fill-amber-400" />
             <span>{current.voteAverage}</span>
           </div>
           {current.releaseDate && (
-            <span className="text-xs text-zinc-300 font-semibold bg-black/40 px-2.5 py-1 rounded border border-white/5">
+            <span className="text-[11px] sm:text-xs text-zinc-300 font-semibold bg-black/40 px-2 py-0.5 rounded border border-white/5">
               {current.releaseDate.split('-')[0]}
             </span>
           )}
-          <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider bg-black/40 px-2.5 py-1 rounded border border-white/5">
+          <span className="text-[11px] sm:text-xs text-zinc-400 font-bold uppercase tracking-wider bg-black/40 px-2 py-0.5 rounded border border-white/5">
             {current.mediaType === 'movie' ? 'Filme' : 'Série'}
           </span>
         </div>
 
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-none drop-shadow-2xl font-['Montserrat',sans-serif]">
+        <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight sm:leading-none drop-shadow-2xl font-['Montserrat',sans-serif] line-clamp-2">
           {current.title}
         </h1>
 
-        <p className="text-xs sm:text-sm text-zinc-200 line-clamp-3 leading-relaxed max-w-2xl drop-shadow font-normal">
+        <p className="text-xs sm:text-sm text-zinc-200 line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-2xl drop-shadow font-normal">
           {current.overview || 'Os títulos mais assistidos e aclamados pelo público.'}
         </p>
 
         {/* Botões de Ação estilo Netflix / Prime Video com Foco TV */}
-        <div className="flex items-center gap-3.5 pt-2">
+        <div className="flex items-center gap-2.5 sm:gap-3.5 pt-1 sm:pt-2 flex-wrap">
           <button
             tabIndex={0}
             disabled={searching}
             onClick={handlePlayNow}
-            className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-white hover:bg-zinc-200 font-black text-sm text-black shadow-2xl transition transform active:scale-95 focus:scale-105 focus:ring-4 focus:ring-rose-500 focus:outline-none disabled:opacity-60 cursor-pointer"
+            className="flex items-center gap-2 px-5 sm:px-8 py-2.5 sm:py-3.5 rounded-xl bg-white hover:bg-zinc-200 font-black text-xs sm:text-sm text-black shadow-2xl transition transform active:scale-95 focus:scale-105 focus:ring-4 focus:ring-rose-500 focus:outline-none disabled:opacity-60 cursor-pointer touch-manipulation"
           >
             {searching ? (
-              <Loader2 size={18} className="animate-spin text-black" />
+              <Loader2 size={16} className="animate-spin text-black" />
             ) : (
-              <Play size={18} className="fill-black text-black" />
+              <Play size={16} className="fill-black text-black" />
             )}
             <span>Assistir Agora</span>
           </button>
@@ -421,9 +441,9 @@ export default function CatalogHeroBanner({
               stopAll()
               onOpenDetails(current)
             }}
-            className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/60 font-bold text-sm text-white shadow-xl transition backdrop-blur-md focus:scale-105 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-600/60 font-bold text-xs sm:text-sm text-white shadow-xl transition backdrop-blur-md focus:scale-105 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer touch-manipulation"
           >
-            <Info size={18} />
+            <Info size={16} />
             <span>Mais Informações</span>
           </button>
         </div>
@@ -435,14 +455,16 @@ export default function CatalogHeroBanner({
         )}
       </div>
 
-      {/* Indicadores de Slide (Apenas Mouse / Decorativos) */}
-      <div className="absolute bottom-8 sm:bottom-10 right-8 sm:right-14 z-30 flex items-center gap-2 bg-black/40 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/10 shadow-2xl pointer-events-none">
+      {/* Indicadores de Slide (Clicáveis) */}
+      <div className="absolute bottom-4 sm:bottom-10 right-4 sm:right-14 z-30 flex items-center gap-1.5 sm:gap-2 bg-black/50 backdrop-blur-md px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10 shadow-2xl">
         {items.map((it, idx) => (
-          <div
+          <button
             key={it.id}
-            className={`h-1.5 rounded-full transition-all duration-300 ${
-              idx === currentIdx ? 'w-8 bg-rose-600 shadow-md shadow-rose-600/50' : 'w-2 bg-white/40'
+            onClick={() => setCurrentIdx(idx)}
+            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer touch-manipulation ${
+              idx === currentIdx ? 'w-6 sm:w-8 bg-rose-600 shadow-md shadow-rose-600/50' : 'w-1.5 sm:w-2 bg-white/40'
             }`}
+            aria-label={`Destaque ${idx + 1}`}
           />
         ))}
       </div>

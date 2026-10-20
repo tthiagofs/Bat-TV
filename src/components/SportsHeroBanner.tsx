@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { Play, Radio, Plus, Info, ChevronLeft, ChevronRight, Check, X, Calendar, Trophy, Tv, Bell, BellCheck } from 'lucide-react'
 import type { Match } from '../services/sportsService'
 import { usePlayback } from '../context/PlaybackContext'
@@ -23,6 +23,10 @@ function SportsHeroBannerBase({ matches }: Props) {
   const [reminded, setReminded] = useState<Record<string, boolean>>({})
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [isBannerFocused, setIsBannerFocused] = useState(false)
+
+  // Suporte a gestos touch swipe em celulares
+  const touchStartX = useRef<number | null>(null)
+  const touchEndX = useRef<number | null>(null)
 
   const activeMatches = matches.slice(0, 8)
   const current = activeMatches[index] || activeMatches[0]
@@ -148,7 +152,23 @@ function SportsHeroBannerBase({ matches }: Props) {
           handlePlay()
         }
       }}
-      className={`relative w-full shrink-0 h-[480px] sm:h-[540px] lg:h-[580px] bg-zinc-950 overflow-hidden select-none border-b border-white/10 group focus:outline-none transition-all duration-300 ${
+      onTouchStart={(e) => {
+        touchStartX.current = e.targetTouches[0].clientX
+        touchEndX.current = null
+      }}
+      onTouchMove={(e) => {
+        touchEndX.current = e.targetTouches[0].clientX
+      }}
+      onTouchEnd={() => {
+        if (touchStartX.current === null || touchEndX.current === null) return
+        const diff = touchStartX.current - touchEndX.current
+        if (diff > 45) {
+          setIndex((prev) => (prev + 1) % activeMatches.length)
+        } else if (diff < -45) {
+          setIndex((prev) => (prev - 1 + activeMatches.length) % activeMatches.length)
+        }
+      }}
+      className={`relative w-full shrink-0 h-[440px] sm:h-[540px] lg:h-[580px] bg-zinc-950 overflow-hidden select-none border-b border-white/10 group focus:outline-none transition-all duration-300 touch-pan-y ${
         isBannerFocused ? 'ring-4 ring-inset ring-rose-500 shadow-[inset_0_0_80px_rgba(244,63,94,0.45)]' : ''
       }`}
     >
@@ -192,21 +212,21 @@ function SportsHeroBannerBase({ matches }: Props) {
       <div className="absolute inset-0 bg-radial-gradient from-transparent via-black/20 to-black/60 z-10 pointer-events-none" />
 
       {/* 3. Conteúdo Principal do Banner Ocupando 100% da Largura da Tela */}
-      <div className="relative z-20 h-full w-full px-8 sm:px-14 lg:px-16 flex flex-col justify-end pb-12 sm:pb-16">
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+      <div className="relative z-20 h-full w-full px-4 sm:px-14 lg:px-16 flex flex-col justify-end pb-8 sm:pb-16">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 sm:gap-8">
           {/* Lado Esquerdo: Metadados da Partida */}
-          <div className="max-w-xl space-y-3.5 sm:space-y-4">
+          <div className="max-w-xl space-y-2.5 sm:space-y-4">
             {/* Linha Superior: Logo da Transmissão e Competição */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               {current.leagueBadge && (
                 <img
                   src={current.leagueBadge}
                   alt={current.league}
-                  className="w-8 h-8 object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
+                  className="w-7 h-7 sm:w-8 sm:h-8 object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]"
                 />
               )}
               <div className="flex flex-col">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-zinc-400">
+                <span className="text-[9px] sm:text-xs font-black uppercase tracking-widest text-zinc-400">
                   {current.league.includes('Copa') ? 'Fase Eliminatória' : 'Ao vivo & Exclusivo'}
                 </span>
                 <span className="text-xs sm:text-sm font-extrabold uppercase tracking-wide text-white drop-shadow">
@@ -215,27 +235,50 @@ function SportsHeroBannerBase({ matches }: Props) {
               </div>
             </div>
 
+            {/* Escudos Compactos no Mobile */}
+            <div className="flex lg:hidden items-center gap-3 py-0.5">
+              <div className="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-md">
+                <div className="w-7 h-7 flex items-center justify-center shrink-0">
+                  {current.homeBadge ? (
+                    <img src={current.homeBadge} alt={current.home} className="w-full h-full object-contain filter drop-shadow" />
+                  ) : (
+                    <span className="font-black text-xs text-white">{current.home.slice(0, 3)}</span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-white truncate max-w-[85px]">{current.home}</span>
+                <span className="text-xs font-black text-zinc-400">vs</span>
+                <div className="w-7 h-7 flex items-center justify-center shrink-0">
+                  {current.awayBadge ? (
+                    <img src={current.awayBadge} alt={current.away} className="w-full h-full object-contain filter drop-shadow" />
+                  ) : (
+                    <span className="font-black text-xs text-white">{current.away.slice(0, 3)}</span>
+                  )}
+                </div>
+                <span className="text-xs font-bold text-white truncate max-w-[85px]">{current.away}</span>
+              </div>
+            </div>
+
             {/* Título Principal */}
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-2xl">
-              {current.home} <span className="text-zinc-400 font-light text-2xl sm:text-3xl">x</span> {current.away}
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-2xl">
+              {current.home} <span className="text-zinc-400 font-light text-xl sm:text-3xl">x</span> {current.away}
             </h1>
 
             {/* Badges de Horário / Status */}
-            <div className="flex flex-wrap items-center gap-3 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-0.5">
               {isLive ? (
-                <span className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-rose-600 text-white font-black text-xs uppercase animate-pulse shadow-lg shadow-rose-950/60">
-                  <Radio size={13} /> {countdownText || 'AO VIVO AGORA'}
+                <span className="flex items-center gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-rose-600 text-white font-black text-[11px] sm:text-xs uppercase animate-pulse shadow-lg shadow-rose-950/60">
+                  <Radio size={12} /> {countdownText || 'AO VIVO AGORA'}
                 </span>
               ) : countdownText ? (
-                <span className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500 text-zinc-950 font-black text-xs uppercase shadow-md shadow-amber-500/30">
+                <span className="flex items-center gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-amber-500 text-zinc-950 font-black text-[11px] sm:text-xs uppercase shadow-md shadow-amber-500/30">
                   ⏱️ {countdownText}
                 </span>
               ) : (
-                <span className="px-3.5 py-1 rounded-full bg-black/60 border border-white/20 text-zinc-200 font-bold text-xs uppercase backdrop-blur-md">
+                <span className="px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-black/60 border border-white/20 text-zinc-200 font-bold text-[11px] sm:text-xs uppercase backdrop-blur-md">
                   EM BREVE · {formatHours(current.time)}
                 </span>
               )}
-              <span className="text-xs text-zinc-300 font-semibold bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">
+              <span className="text-[11px] sm:text-xs text-zinc-300 font-semibold bg-white/10 px-2.5 py-0.5 sm:py-1 rounded-full backdrop-blur-md border border-white/10">
                 Canal: {current.channels?.join(', ') || channel}
               </span>
             </div>
@@ -245,16 +288,16 @@ function SportsHeroBannerBase({ matches }: Props) {
             </p>
 
             {/* Ações Estilo Prime Video / Paramount+ */}
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 pt-1 sm:pt-2">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   handlePlay()
                 }}
-                className="flex items-center gap-2.5 px-7 py-3 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-black text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500"
+                className="flex items-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-black text-xs sm:text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500 touch-manipulation"
               >
-                <Play size={18} className="fill-zinc-950" />
+                <Play size={16} className="fill-zinc-950" />
                 <span>{isLive ? 'Assistir Agora' : `Assistir na ${channel}`}</span>
               </button>
 
@@ -264,14 +307,14 @@ function SportsHeroBannerBase({ matches }: Props) {
                   e.stopPropagation()
                   toggleReminder()
                 }}
-                className={`p-3 rounded-full border transition hover:scale-105 cursor-pointer backdrop-blur-md focus:outline-none focus:ring-4 focus:ring-rose-500 ${
+                className={`p-2.5 sm:p-3 rounded-full border transition hover:scale-105 cursor-pointer backdrop-blur-md focus:outline-none focus:ring-4 focus:ring-rose-500 touch-manipulation active:scale-90 ${
                   reminded[current.id]
                     ? 'bg-rose-600 text-white border-rose-500 shadow-lg shadow-rose-950/50'
                     : 'bg-black/60 hover:bg-white/15 border-white/20 text-white'
                 }`}
                 title={reminded[current.id] ? 'Lembrete ativado' : 'Adicionar aos Lembretes'}
               >
-                {reminded[current.id] ? <Check size={18} /> : <Plus size={18} />}
+                {reminded[current.id] ? <Check size={16} /> : <Plus size={16} />}
               </button>
 
               <button
@@ -280,10 +323,10 @@ function SportsHeroBannerBase({ matches }: Props) {
                   e.stopPropagation()
                   setShowDetailsModal(true)
                 }}
-                className="p-3 rounded-full bg-black/60 hover:bg-white/15 border border-white/20 text-white transition hover:scale-105 cursor-pointer backdrop-blur-md focus:outline-none focus:ring-4 focus:ring-rose-500"
+                className="p-2.5 sm:p-3 rounded-full bg-black/60 hover:bg-white/15 border border-white/20 text-white transition hover:scale-105 cursor-pointer backdrop-blur-md focus:outline-none focus:ring-4 focus:ring-rose-500 touch-manipulation active:scale-90"
                 title="Mais Informações da Partida"
               >
-                <Info size={18} />
+                <Info size={16} />
               </button>
             </div>
           </div>
@@ -344,17 +387,17 @@ function SportsHeroBannerBase({ matches }: Props) {
         </div>
       </div>
 
-      {/* Setas de navegação lateral (Apenas Mouse / Desktop) */}
+      {/* Setas de navegação lateral (Toque no mobile e hover no desktop) */}
       <button
         type="button"
         tabIndex={-1}
         data-tv-ignore="true"
         aria-hidden="true"
         onClick={() => setIndex((prev) => (prev - 1 + activeMatches.length) % activeMatches.length)}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2.5 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer"
+        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-2.5 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer touch-manipulation active:scale-90"
         aria-label="Anterior"
       >
-        <ChevronLeft size={24} />
+        <ChevronLeft size={22} className="sm:w-6 sm:h-6" />
       </button>
       <button
         type="button"
@@ -362,10 +405,10 @@ function SportsHeroBannerBase({ matches }: Props) {
         data-tv-ignore="true"
         aria-hidden="true"
         onClick={() => setIndex((prev) => (prev + 1) % activeMatches.length)}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2.5 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer"
+        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 p-2 sm:p-2.5 rounded-full bg-black/60 hover:bg-rose-600 text-white opacity-85 sm:opacity-0 sm:group-hover:opacity-100 transition shadow-2xl backdrop-blur-md border border-white/10 cursor-pointer touch-manipulation active:scale-90"
         aria-label="Próximo"
       >
-        <ChevronRight size={24} />
+        <ChevronRight size={22} className="sm:w-6 sm:h-6" />
       </button>
 
       {/* Indicadores de Slides em Cápsula Glassmorphic */}

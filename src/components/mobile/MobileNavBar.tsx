@@ -1,5 +1,6 @@
-import { Home, Film, Tv, Trophy, User } from 'lucide-react'
+import { Home, Film, Tv, Trophy } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
+import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import type { Section } from '../../types'
 
 interface Props {
@@ -50,20 +51,14 @@ export default function MobileNavBar({ activeSection, onSelectSection }: Props) 
               <button
                 key={item.id}
                 onClick={() => onSelectSection(item.id)}
-                className="flex flex-col items-center gap-1 py-1 px-2 transition active:scale-95 focus:outline-none cursor-pointer"
+                className="flex flex-col items-center gap-1 py-1 px-2 transition active:scale-95 focus:outline-none cursor-pointer touch-manipulation"
               >
                 <div
                   className={`w-6 h-6 rounded-md overflow-hidden transition-all flex items-center justify-center ${
-                    isActive ? 'ring-2 ring-rose-500 scale-105' : 'opacity-70'
+                    isActive ? 'ring-2 ring-rose-500 scale-105 shadow-md' : 'opacity-75'
                   }`}
                 >
-                  {profile?.avatar ? (
-                    <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-sky-500 flex items-center justify-center text-[10px] font-bold text-white">
-                      😊
-                    </div>
-                  )}
+                  <Avatar id={profile?.avatar || DEFAULT_AVATAR} size={24} className="w-full h-full rounded-md" />
                 </div>
                 <span
                   className={`text-[10px] font-medium tracking-tight ${
