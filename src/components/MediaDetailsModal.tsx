@@ -399,13 +399,13 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 fade-up select-none overflow-x-hidden"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 pt-[max(env(safe-area-inset-top),1.25rem)] pb-[max(env(safe-area-inset-bottom),1.25rem)] fade-up select-none overflow-x-hidden"
     >
       <div className="bg-zinc-950 border border-white/10 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative text-zinc-100 overscroll-contain">
         {/* Botão de Fechar Proeminente */}
         <button
           onClick={onClose}
-          className="absolute top-6 right-5 sm:top-5 sm:right-6 z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none touch-manipulation"
+          className="absolute top-10 right-5 sm:top-7 sm:right-7 z-50 p-3 rounded-full bg-black/90 hover:bg-rose-600 text-white border border-white/30 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none touch-manipulation active:scale-95"
           title="Fechar detalhes (Esc)"
           aria-label="Fechar"
         >

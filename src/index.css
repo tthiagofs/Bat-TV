@@ -6,15 +6,37 @@
   --color-accent: #e11d48;
 }
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
 html, body, #root {
   height: 100%;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  overflow: hidden;
 }
 body {
   @apply bg-black text-zinc-100 antialiased selection:bg-rose-600 selection:text-white;
   font-family: var(--font-sans);
   background-color: #000000;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Player em tela cheia ocupando 100vw e 100vh absolutos sem margens ou barras brancas */
+[data-tv-player="true"] {
+  background-color: #000000 !important;
+}
+
+[data-tv-player="true"] video {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 html.native-player-active,

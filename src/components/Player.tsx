@@ -592,44 +592,76 @@ export default function Player({
   }, [volume, muted, isNative])
 
   const toggleFullscreen = useCallback(() => {
-    // 1. Se o navegador já estiver em modo tela cheia nativo, sai
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {})
-      return
-    }
+    const v = videoRef.current as any
+    const c = containerRef.current as any
 
-    // 2. No Mobile em modo Portrait:
-    // O player já está em tela cheia na horizontal simulada com 100dvh x 100dvw.
-    // No iOS Safari (iPhone), chamar webkitEnterFullscreen() abre o QuickTime em vertical e quebra o app.
-    if (isMobileDevice && isPortrait) {
-      if (containerRef.current?.requestFullscreen) {
-        containerRef.current
-          .requestFullscreen()
-          .then(() => {
-            try {
-              if (screen.orientation && 'lock' in screen.orientation) {
-                ;(screen.orientation as any).lock('landscape').catch(() => {})
-              }
-            } catch {}
-          })
-          .catch(() => {})
-      } else {
-        // No iPhone, assegura que o modo tela cheia horizontal customizado fique ativo
-        setForceLandscape(true)
+    // 1. Verifica se já está em tela cheia
+    const isFs = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement ||
+      (v && v.webkitDisplayingFullscreen)
+    )
+
+    if (isFs) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {})
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen()
+      } else if (v && v.webkitExitFullscreen) {
+        v.webkitExitFullscreen()
       }
+      setFullscreen(false)
       return
     }
 
-    // 3. Em Desktop ou quando o aparelho já está fisicamente deitado (Landscape):
-    if (containerRef.current?.requestFullscreen) {
-      containerRef.current.requestFullscreen().catch(() => {})
-    } else {
-      const v = videoRef.current as any
-      if (v && v.webkitEnterFullscreen) {
+    // 2. No Safari do iOS (iPhone / iPad), webkitEnterFullscreen deve ser chamado diretamente e de forma síncrona
+    if (v && typeof v.webkitEnterFullscreen === 'function' && !c?.requestFullscreen) {
+      try {
         v.webkitEnterFullscreen()
+        setFullscreen(true)
+        return
+      } catch (err) {
+        console.warn('Erro ao abrir tela cheia nativa no Safari:', err)
       }
     }
-  }, [isMobileDevice, isPortrait])
+
+    // 3. Em navegadores com Fullscreen API padrão (Android Chrome, Desktop, Edge)
+    if (c && typeof c.requestFullscreen === 'function') {
+      c.requestFullscreen()
+        .then(() => {
+          try {
+            if (screen.orientation && 'lock' in screen.orientation) {
+              ;(screen.orientation as any).lock('landscape').catch(() => {})
+            }
+          } catch {}
+          setFullscreen(true)
+        })
+        .catch(() => {
+          if (v && typeof v.webkitEnterFullscreen === 'function') {
+            v.webkitEnterFullscreen()
+            setFullscreen(true)
+          }
+        })
+      return
+    }
+
+    if (c && typeof c.webkitRequestFullscreen === 'function') {
+      c.webkitRequestFullscreen()
+      setFullscreen(true)
+      return
+    }
+
+    // 4. Fallback final para vídeo
+    if (v && typeof v.webkitEnterFullscreen === 'function') {
+      v.webkitEnterFullscreen()
+      setFullscreen(true)
+      return
+    }
+
+    setForceLandscape((prev) => !prev)
+  }, [])
 
   const togglePlay = useCallback(() => {
     if (isNative) {
@@ -645,8 +677,16 @@ export default function Player({
   }, [isNative, playing])
 
   useEffect(() => {
-    const onFs = () => setFullscreen(!!document.fullscreenElement)
+    const onFs = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (videoRef.current as any)?.webkitDisplayingFullscreen
+      )
+      setFullscreen(isFs)
+    }
     document.addEventListener('fullscreenchange', onFs)
+    document.addEventListener('webkitfullscreenchange', onFs)
     const v = videoRef.current as any
     const onWebkitBegin = () => setFullscreen(true)
     const onWebkitEnd = () => setFullscreen(false)
@@ -656,6 +696,7 @@ export default function Player({
     }
     return () => {
       document.removeEventListener('fullscreenchange', onFs)
+      document.removeEventListener('webkitfullscreenchange', onFs)
       if (v) {
         v.removeEventListener('webkitbeginfullscreen', onWebkitBegin)
         v.removeEventListener('webkitendfullscreen', onWebkitEnd)
