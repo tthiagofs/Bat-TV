@@ -71,19 +71,39 @@ function iptvDevProxy(): Plugin {
                   })
                   proxyRes.on('end', () => {
                     const rewritten = manifestText
-                      .split('\n')
-                      .map((line) => {
-                        const trimmed = line.trim()
-                        if (!trimmed || trimmed.startsWith('#')) return line
-                        try {
-                          const absUrl = new URL(trimmed, targetUrl).toString()
-                          return `/iptv-proxy?url=${encodeURIComponent(absUrl)}`
-                        } catch {
-                          return line
-                        }
-                      })
-                      .join('\n')
-                    res.end(rewritten)
+                    .split('\n')
+                    .map((line) => {
+                      let l = line.trim()
+                      if (!l) return line
+
+                      // 1. Reescreve chaves de criptografia e mapas (#EXT-X-KEY, #EXT-X-MAP, etc)
+                      if (l.includes('URI=')) {
+                        l = l.replace(/URI=["']?([^"',>\s]+)["']?/g, (_, uri) => {
+                          try {
+                            const absUrl = new URL(uri, targetUrl).toString()
+                            return `URI="/iptv-proxy?url=${encodeURIComponent(absUrl)}"`
+                          } catch {
+                            return `URI="${uri}"`
+                          }
+                        })
+                        return l
+                      }
+
+                      // 2. Não altera outras tags de metadados HLS
+                      if (l.startsWith('#')) return line
+
+                      // 3. Linhas de segmentos (.ts) ou sub-playlists (.m3u8)
+                      try {
+                        const absUrl = new URL(l, targetUrl).toString()
+                        return `/iptv-proxy?url=${encodeURIComponent(absUrl)}`
+                      } catch {
+                        return line
+                      }
+                    })
+                    .join('\n')
+                  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+                  res.setHeader('Content-Length', Buffer.byteLength(rewritten, 'utf-8'))
+                  res.end(rewritten)
                   })
                   return
                 }

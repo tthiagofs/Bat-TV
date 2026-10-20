@@ -470,7 +470,7 @@ export default function Player({
             hls?.destroy()
             hlsRef.current = null
             if (video) {
-              video.src = rawUrl
+              video.src = streamUrl
               video.load()
               video.play().catch((err) => {
                 console.warn('Fallback tag video falhou:', err)
@@ -486,7 +486,7 @@ export default function Player({
           hls?.destroy()
           hlsRef.current = null
           if (video) {
-            video.src = rawUrl
+            video.src = streamUrl
             video.load()
             video.play().catch(() => {
               setBuffering(false)

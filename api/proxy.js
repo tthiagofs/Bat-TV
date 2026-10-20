@@ -2,10 +2,11 @@ import http from 'node:http'
 import https from 'node:https'
 
 export default function handler(req, res) {
-  // Permite CORS total e cabeçalhos de streaming
+  // Permite CORS total e cabeçalhos de streaming de vídeo
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
   res.setHeader('Access-Control-Allow-Headers', '*')
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
   res.setHeader('Accept-Ranges', 'bytes')
 
   if (req.method === 'OPTIONS') {
@@ -51,9 +52,10 @@ export default function handler(req, res) {
           res.statusCode = proxyRes.statusCode || 200
           res.setHeader('Access-Control-Allow-Origin', '*')
           res.setHeader('Access-Control-Allow-Headers', '*')
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
           res.setHeader('Accept-Ranges', 'bytes')
 
-          const contentType = proxyRes.headers['content-type'] || 'application/json'
+          const contentType = proxyRes.headers['content-type'] || 'application/octet-stream'
           res.setHeader('Content-Type', contentType)
 
           if (proxyRes.headers['content-range']) {
@@ -63,7 +65,7 @@ export default function handler(req, res) {
             res.setHeader('Content-Length', proxyRes.headers['content-length'])
           }
 
-          // Se for manifesto HLS (.m3u8), reescreve os links para passar pelo proxy
+          // Se for manifesto HLS (.m3u8), reescreve chaves AES-128 e segmentos .ts
           const isM3u8 = contentType.includes('mpegurl') || targetUrl.includes('.m3u8')
           if (isM3u8) {
             let manifestText = ''
@@ -74,16 +76,37 @@ export default function handler(req, res) {
               const rewritten = manifestText
                 .split('\n')
                 .map((line) => {
-                  const trimmed = line.trim()
-                  if (!trimmed || trimmed.startsWith('#')) return line
+                  let l = line.trim()
+                  if (!l) return line
+
+                  // 1. Reescreve chaves de criptografia e mapas (#EXT-X-KEY, #EXT-X-MAP, etc)
+                  if (l.includes('URI=')) {
+                    l = l.replace(/URI=["']?([^"',>\s]+)["']?/g, (_, uri) => {
+                      try {
+                        const absUrl = new URL(uri, targetUrl).toString()
+                        return `URI="/api/proxy?url=${encodeURIComponent(absUrl)}"`
+                      } catch {
+                        return `URI="${uri}"`
+                      }
+                    })
+                    return l
+                  }
+
+                  // 2. Não altera outras tags de metadados HLS
+                  if (l.startsWith('#')) return line
+
+                  // 3. Linhas de segmentos (.ts) ou sub-playlists (.m3u8)
                   try {
-                    const absUrl = new URL(trimmed, targetUrl).toString()
+                    const absUrl = new URL(l, targetUrl).toString()
                     return `/api/proxy?url=${encodeURIComponent(absUrl)}`
                   } catch {
                     return line
                   }
                 })
                 .join('\n')
+
+              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
+              res.setHeader('Content-Length', Buffer.byteLength(rewritten, 'utf-8'))
               res.end(rewritten)
             })
             return

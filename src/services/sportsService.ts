@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import type { Club } from '../data/teams'
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer'
@@ -57,13 +58,13 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
   'conmebol.libertadores': {
     slug: 'conmebol.libertadores',
     name: 'Copa Libertadores',
-    badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2679.png',
+    badge: 'https://r2.thesportsdb.com/images/media/league/badge/gq50361582151025.png',
     tv: ['ESPN', 'Paramount+', 'Globo'],
   },
   'conmebol.sudamericana': {
     slug: 'conmebol.sudamericana',
     name: 'Copa Sul-Americana',
-    badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2680.png',
+    badge: 'https://r2.thesportsdb.com/images/media/league/badge/03v2p51582151068.png',
     tv: ['ESPN', 'Paramount+', 'SBT'],
   },
   'uefa.champions': {
@@ -182,11 +183,20 @@ async function fetchEspnJson<T = Json>(url: string, ttlMs = 120_000): Promise<T>
     return hit.data as T
   }
 
+  const isWeb = typeof window !== 'undefined' &&
+    !window.navigator.userAgent.toLowerCase().includes('electron') &&
+    window.location.protocol !== 'file:' &&
+    !Capacitor.isNativePlatform()
+
+  const targetUrl = isWeb
+    ? (import.meta.env.DEV ? `/iptv-proxy?url=${encodeURIComponent(url)}` : `/api/proxy?url=${encodeURIComponent(url)}`)
+    : url
+
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 7000) // 7s timeout max
 
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await fetch(targetUrl, { signal: controller.signal })
     clearTimeout(timeoutId)
     if (!res.ok) throw new Error(`ESPN HTTP ${res.status}`)
     const data = (await res.json()) as T
