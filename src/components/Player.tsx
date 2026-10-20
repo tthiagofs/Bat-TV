@@ -595,7 +595,7 @@ export default function Player({
     const v = videoRef.current as any
     const c = containerRef.current as any
 
-    // 1. Verifica se já está em tela cheia
+    // 1. Verifica se já está em tela cheia nativa
     const isFs = !!(
       document.fullscreenElement ||
       (document as any).webkitFullscreenElement ||
@@ -616,28 +616,36 @@ export default function Player({
       return
     }
 
-    // 2. No Safari do iOS (iPhone / iPad), webkitEnterFullscreen deve ser chamado diretamente e de forma síncrona
-    if (v && typeof v.webkitEnterFullscreen === 'function' && !c?.requestFullscreen) {
-      try {
-        v.webkitEnterFullscreen()
-        setFullscreen(true)
+    // 2. Se o usuário estiver no celular com a tela em pé (isPortrait):
+    // Como a trava de orientação vertical do iOS pode estar ligada, o QuickTime do iOS
+    // FORÇARIA o vídeo para vertical se chamado. Por isso, mantemos a rotação horizontal
+    // inteligente em 90 graus (como Netflix/Prime Video) e alternamos para preenchimento total!
+    if (isMobileDevice && isPortrait) {
+      if (c && typeof c.requestFullscreen === 'function') {
+        c.requestFullscreen()
+          .then(() => {
+            try {
+              if (screen.orientation && 'lock' in screen.orientation) {
+                ;(screen.orientation as any).lock('landscape').catch(() => {})
+              }
+            } catch {}
+            setFullscreen(true)
+          })
+          .catch(() => {})
         return
-      } catch (err) {
-        console.warn('Erro ao abrir tela cheia nativa no Safari:', err)
       }
+
+      // No Safari do iPhone: alterna proporção para preenchimento total e fecha controles
+      setForceLandscape(true)
+      setAspect((prev) => (prev === 'contain' ? 'cover' : 'contain'))
+      setShowControls(false)
+      return
     }
 
-    // 3. Em navegadores com Fullscreen API padrão (Android Chrome, Desktop, Edge)
+    // 3. Se o aparelho já estiver fisicamente na horizontal (landscape, isPortrait = false) ou Desktop:
     if (c && typeof c.requestFullscreen === 'function') {
       c.requestFullscreen()
-        .then(() => {
-          try {
-            if (screen.orientation && 'lock' in screen.orientation) {
-              ;(screen.orientation as any).lock('landscape').catch(() => {})
-            }
-          } catch {}
-          setFullscreen(true)
-        })
+        .then(() => setFullscreen(true))
         .catch(() => {
           if (v && typeof v.webkitEnterFullscreen === 'function') {
             v.webkitEnterFullscreen()
@@ -653,15 +661,18 @@ export default function Player({
       return
     }
 
-    // 4. Fallback final para vídeo
     if (v && typeof v.webkitEnterFullscreen === 'function') {
-      v.webkitEnterFullscreen()
-      setFullscreen(true)
-      return
+      try {
+        v.webkitEnterFullscreen()
+        setFullscreen(true)
+        return
+      } catch (err) {
+        console.warn('Erro ao abrir tela cheia nativa no Safari:', err)
+      }
     }
 
     setForceLandscape((prev) => !prev)
-  }, [])
+  }, [isMobileDevice, isPortrait])
 
   const togglePlay = useCallback(() => {
     if (isNative) {
