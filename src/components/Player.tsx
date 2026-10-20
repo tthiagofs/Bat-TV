@@ -1413,7 +1413,7 @@ export default function Player({
         </div>
       )}
 
-      {/* Botão de Fechar Sempre Acessível e Fora do Dynamic Island / Notch */}
+      {/* Botão de Fechar (Aparece e some junto com os controles) */}
       <button
         type="button"
         id="player-always-close"
@@ -1421,7 +1421,9 @@ export default function Player({
           e.stopPropagation()
           onClose()
         }}
-        className="fixed z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 shadow-2xl backdrop-blur-md active:scale-90 transition cursor-pointer touch-manipulation"
+        className={`fixed z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 shadow-2xl backdrop-blur-md active:scale-90 transition-opacity duration-300 cursor-pointer touch-manipulation ${
+          showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
         style={{
           top: isRotatedLandscape ? '1.5rem' : 'max(env(safe-area-inset-top, 0px), 1rem)',
           left: isRotatedLandscape ? 'max(env(safe-area-inset-top, 0px), 4.5rem)' : 'max(env(safe-area-inset-left, 0px), 1.25rem)',
