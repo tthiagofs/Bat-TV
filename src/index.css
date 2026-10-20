@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #e11d48;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-zinc-900 text-zinc-100 antialiased selection:bg-rose-600 selection:text-white;
+  font-family: var(--font-sans);
+}
+
+html.native-player-active,
+html.native-player-active body,
+html.native-player-active #root,
+body.native-player-active,
+body.native-player-active #root {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+body.native-player-active #app-shell-wrapper,
+body.native-player-active #root > *:not([data-tv-player="true"]):not(#app-shell-wrapper) {
+  display: none !important;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.fade-up { animation: fade-up .35s ease both; }
+
+/* Renderiza apenas cartoes visiveis (navegacao fluida em listas grandes) */
+.cv-auto { content-visibility: auto; contain-intrinsic-size: 160px 280px; }
+
+@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+.shake { animation: shake .3s ease; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Modo Leve (padrão): remove blur de fundo (muito pesado em GPUs fracas/Fire Stick),
+   mantém o visual com fundos translúcidos. Para desligar: remova a classe "lite" do <html>. */
+html.lite *,
+html.lite *::before,
+html.lite *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.lite .fade-up { animation-duration: .2s; }
+
+/* Estilo global de Foco do Controle Remoto (D-Pad TV & Teclado) */
+:focus-visible {
+  outline: none !important;
+}
+button:focus-visible,
+a:focus-visible,
+[tabindex="0"]:focus-visible,
+input:focus-visible {
+  outline: 2px solid #f43f5e !important;
+  outline-offset: 2px !important;
+}
+
