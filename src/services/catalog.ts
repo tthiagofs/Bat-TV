@@ -159,10 +159,9 @@ export async function searchTitleInCatalog(
 
   try {
     const cats = type === 'movies' ? await service.getVodCategories() : await service.getSeriesCategories()
-    const allCatResults = await Promise.all(
-      cats.map((c) => getItems(service, type, c.category_id).catch(() => [] as MediaItem[]))
-    )
-    for (const list of allCatResults) {
+    // Busca prioritária nas primeiras categorias (lançamentos e destaques)
+    for (const cat of cats.slice(0, 10)) {
+      const list = await getItems(service, type, cat.category_id).catch(() => [] as MediaItem[])
       const match = findInCatalog(list, target)
       if (match) return match
     }

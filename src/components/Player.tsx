@@ -186,7 +186,7 @@ export default function Player({
     if (typeof window === 'undefined') return false
     return window.innerHeight > window.innerWidth
   })
-  const [forceLandscape, setForceLandscape] = useState(false)
+  const [forceLandscape, setForceLandscape] = useState(true)
   const [isDraggingProgress, setIsDraggingProgress] = useState(false)
   const [dragProgressVal, setDragProgressVal] = useState<number | null>(null)
 
@@ -1210,7 +1210,7 @@ export default function Player({
           ref={videoRef}
           playsInline
           {...{ 'webkit-playsinline': 'true' }}
-          onClick={togglePlay}
+          onClick={() => setShowControls((prev) => !prev)}
           onDoubleClick={toggleFullscreen}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
@@ -1696,7 +1696,16 @@ export default function Player({
 
       {/* Gaveta Lateral Translúcida do Quick Zap (Mini-EPG / Zapear rápido) */}
       {isLive && showQuickZap && channelsList.length > 0 && (
-        <div className="absolute inset-y-0 left-0 w-72 sm:w-96 max-w-[85vw] bg-zinc-950/95 backdrop-blur-xl border-r border-white/15 z-50 flex flex-col shadow-2xl fade-up select-none">
+        <>
+          {/* Backdrop para fechar a gaveta ao clicar em qualquer outro lugar da tela */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowQuickZap(false)
+            }}
+            className="absolute inset-0 z-40 bg-black/60 backdrop-blur-xs cursor-pointer touch-manipulation"
+          />
+          <div className="absolute inset-y-0 left-0 w-72 sm:w-96 max-w-[85vw] bg-zinc-950/95 backdrop-blur-xl border-r border-white/15 z-50 flex flex-col shadow-2xl fade-up select-none">
           {/* Topo do Quick Zap */}
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1771,20 +1780,21 @@ export default function Player({
               })}
           </div>
         </div>
-      )}
+      </>
+    )}
 
-      {/* Botão Flutuante de Pular Abertura (+30s) - Visível nos primeiros 10s ou após clique */}
+      {/* Botão Flutuante de Pular Abertura (+30s) - Versão Compacta Mobile */}
       {isSeries && showFloatingSkip && (
-        <div className="absolute bottom-24 right-8 z-40 transition-all duration-300 select-none">
+        <div className="absolute bottom-20 right-4 sm:bottom-24 sm:right-8 z-40 transition-all duration-300 select-none">
           <button
             id="player-skip-intro-floating-btn"
             tabIndex={0}
             onClick={handleSkipIntro}
-            className="flex items-center gap-2.5 px-5 py-3 rounded-2xl bg-zinc-950/90 hover:bg-zinc-900 text-white font-extrabold text-sm shadow-2xl border border-zinc-700/80 backdrop-blur-md hover:scale-105 active:scale-95 transition-all group cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none focus:border-rose-400"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 text-white font-bold text-xs sm:text-sm shadow-2xl border border-zinc-700/80 backdrop-blur-md hover:scale-105 active:scale-95 transition-all group cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none focus:border-rose-400 touch-manipulation"
           >
-            <FastForward size={18} className="text-rose-500 group-hover:scale-110 transition-transform" />
+            <FastForward size={14} className="text-rose-500 group-hover:scale-110 transition-transform" />
             <span>Pular Abertura</span>
-            <span className="px-2 py-0.5 rounded bg-rose-600/30 text-rose-400 text-xs font-black border border-rose-500/40">
+            <span className="px-1.5 py-0.5 rounded bg-rose-600/30 text-rose-400 text-[10px] font-black border border-rose-500/40">
               +30s
             </span>
           </button>

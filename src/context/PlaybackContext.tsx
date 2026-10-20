@@ -1,5 +1,5 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-const Player = lazy(() => import('../components/Player'))
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import Player from '../components/Player'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { useAuth } from './AuthContext'
 import { useProfiles } from './ProfileContext'
@@ -43,6 +43,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const { service } = useAuth()
   const { active, upsertHistory } = useProfiles()
   const [current, setCurrent] = useState<Current | null>(null)
+  const [openingMediaTitle, setOpeningMediaTitle] = useState<string | null>(null)
   const [playlist, setPlaylist] = useState<MediaItem[]>([])
   const [error, setError] = useState('')
   const historyRef = useRef(active?.history ?? [])
@@ -59,6 +60,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     trailerCoordinator.stopAll()
     if (!service) return
     setError('')
+    setOpeningMediaTitle(item.name)
     const saved = historyRef.current.find((h) => h.key === item.key)
     const resumable = !opts.fromStart && saved && saved.duration > 0 &&
       saved.position / saved.duration > 0.02 && saved.position / saved.duration < 0.95
@@ -68,10 +70,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       setPlaylist(opts.playlist ?? [])
       upsertHistory({ ...item, position: 0, duration: 0, updatedAt: Date.now() })
       setCurrent({ item, url: service.liveUrl(item.id, 'm3u8'), title: item.name, isLive: true, startAt: 0 })
+      setOpeningMediaTitle(null)
       return
     }
     if (item.type === 'movies') {
       setCurrent({ item, url: service.vodUrl(item.id, item.ext), title: item.name, isLive: false, startAt })
+      setOpeningMediaTitle(null)
       return
     }
     try {
@@ -175,6 +179,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar série')
+    } finally {
+      setOpeningMediaTitle(null)
     }
   }, [service, upsertHistory])
 
@@ -325,27 +331,35 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
             </div>
           )}
         >
-          <Suspense fallback={<div className="fixed inset-0 z-[200] bg-black flex items-center justify-center"><div className="h-10 w-10 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" /></div>}>
-            <Player
-              url={current.url}
-              title={current.title}
-              isLive={current.isLive}
-              startAt={current.startAt}
-              onClose={() => setCurrent(null)}
-              onPrev={current.isLive ? zapPrev : undefined}
-              onNext={current.isLive ? zapNext : undefined}
-              channelLabel={channelLabel}
-              getEpg={getEpg}
-              onProgress={current.isLive ? undefined : onProgress}
-              isSeries={current.item.type === 'series'}
-              onNextEpisode={nextEpisodeTitle ? playNextEpisode : undefined}
-              nextEpisodeTitle={nextEpisodeTitle}
-              channelVariants={channelVariants}
-              channelsList={live}
-              onSelectChannel={(ch) => play(ch, { playlist })}
-            />
-          </Suspense>
+          <Player
+            url={current.url}
+            title={current.title}
+            isLive={current.isLive}
+            startAt={current.startAt}
+            onClose={() => setCurrent(null)}
+            onPrev={current.isLive ? zapPrev : undefined}
+            onNext={current.isLive ? zapNext : undefined}
+            channelLabel={channelLabel}
+            getEpg={getEpg}
+            onProgress={current.isLive ? undefined : onProgress}
+            isSeries={current.item.type === 'series'}
+            onNextEpisode={nextEpisodeTitle ? playNextEpisode : undefined}
+            nextEpisodeTitle={nextEpisodeTitle}
+            channelVariants={channelVariants}
+            channelsList={live}
+            onSelectChannel={(ch) => play(ch, { playlist })}
+          />
         </ErrorBoundary>
+      )}
+
+      {openingMediaTitle && !current && (
+        <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center space-y-4 fade-up select-none">
+          <div className="h-12 w-12 border-3 border-rose-500 border-t-transparent rounded-full animate-spin" />
+          <div className="text-center space-y-1">
+            <p className="text-base font-bold text-white tracking-wide">Iniciando Reprodução</p>
+            <p className="text-xs text-zinc-400">{openingMediaTitle}</p>
+          </div>
+        </div>
       )}
     </Ctx.Provider>
   )

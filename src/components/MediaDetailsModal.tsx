@@ -413,23 +413,23 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
         </button>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-12 w-full max-w-full">
-          {/* 1. Hero Backdrop no Padrão Amazon Prime Video TV */}
-          <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[480px] bg-zinc-950 overflow-hidden">
+          {/* 1. Hero Backdrop no Padrão Amazon Prime Video TV / Mobile Netflix */}
+          <div className="relative w-full min-h-[400px] sm:min-h-[460px] lg:min-h-[480px] flex flex-col justify-end p-5 sm:p-10 pt-16 bg-zinc-950 overflow-hidden">
             {currentItem.backdropPath || currentItem.posterPath ? (
               <img
                 src={currentItem.backdropPath || currentItem.posterPath || ''}
                 alt={currentItem.title}
-                className="w-full h-full object-cover object-center filter brightness-90"
+                className="absolute inset-0 w-full h-full object-cover object-center filter brightness-90"
               />
             ) : (
-              <div className="w-full h-full bg-gradient-to-r from-blue-950 via-zinc-900 to-black" />
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-950 via-zinc-900 to-black" />
             )}
             {/* Gradientes Suaves */}
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/90 via-zinc-950/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/70 to-black/40 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/90 via-zinc-950/40 to-transparent pointer-events-none" />
 
             {/* Conteúdo do Topo estilo Prime Video TV */}
-            <div className="absolute bottom-6 left-6 right-6 sm:bottom-10 sm:left-10 sm:right-10 flex flex-col justify-end space-y-3 sm:space-y-4">
+            <div className="relative z-10 flex flex-col justify-end space-y-3 sm:space-y-4">
               {/* Selo Prime Video / IPTV */}
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black uppercase tracking-widest text-sky-400 bg-sky-950/60 border border-sky-400/30 px-2 py-0.5 rounded">

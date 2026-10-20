@@ -22,7 +22,7 @@ export default function MobileTopBar({
   const { active: profile } = useProfiles()
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-gradient-to-b from-black/95 via-black/75 to-transparent pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 px-4 transition-all">
+    <header className="absolute top-0 inset-x-0 z-40 w-full bg-gradient-to-b from-black/85 via-black/40 to-transparent pt-[max(env(safe-area-inset-top),0.5rem)] pb-3 px-4 pointer-events-auto transition-all">
       {/* Linha Superior: Logo Oficial + Ações */}
       <div className="flex items-center justify-between h-12">
         <div className="flex items-center gap-2">

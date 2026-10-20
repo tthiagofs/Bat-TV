@@ -44,7 +44,7 @@ export default function MobileShell() {
       <main className="flex-1 min-h-0 overflow-hidden flex flex-col relative">
         <ErrorBoundary>
           {search ? (
-            <div className="flex-1 min-h-0 flex flex-col pb-20">
+            <div className="flex-1 min-h-0 flex flex-col pb-20 pt-[max(env(safe-area-inset-top),4rem)]">
               <Browse
                 section={
                   section === 'home' || section === 'sports' || section === 'downloads' || section === 'my-netflix'
@@ -89,16 +89,18 @@ export default function MobileShell() {
               )}
 
               {section === 'downloads' && (
-                <div className="flex-1 min-h-0 flex flex-col pb-20">
+                <div className="flex-1 min-h-0 flex flex-col pb-20 pt-[max(env(safe-area-inset-top),4rem)]">
                   <Downloads onNavigate={handleSelectSection} />
                 </div>
               )}
 
               {section === 'my-netflix' && (
-                <MobileMyProfile
-                  onNavigate={handleSelectSection}
-                  onOpenEditProfile={() => setShowEditProfileModal(true)}
-                />
+                <div className="flex-1 min-h-0 flex flex-col pb-20 pt-[max(env(safe-area-inset-top),4rem)]">
+                  <MobileMyProfile
+                    onNavigate={handleSelectSection}
+                    onOpenEditProfile={() => setShowEditProfileModal(true)}
+                  />
+                </div>
               )}
             </>
           )}

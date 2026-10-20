@@ -6,10 +6,15 @@
   --color-accent: #e11d48;
 }
 
-html, body, #root { height: 100%; }
+html, body, #root {
+  height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
 body {
-  @apply bg-zinc-900 text-zinc-100 antialiased selection:bg-rose-600 selection:text-white;
+  @apply bg-black text-zinc-100 antialiased selection:bg-rose-600 selection:text-white;
   font-family: var(--font-sans);
+  background-color: #000000;
 }
 
 html.native-player-active,
