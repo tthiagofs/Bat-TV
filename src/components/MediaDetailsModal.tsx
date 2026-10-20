@@ -399,20 +399,20 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 fade-up select-none"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 fade-up select-none overflow-x-hidden"
     >
-      <div className="bg-zinc-950 border border-white/10 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative text-zinc-100">
+      <div className="bg-zinc-950 border border-white/10 rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden relative text-zinc-100 overscroll-contain">
         {/* Botão de Fechar Proeminente */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-black/80 hover:bg-rose-600 text-white border border-white/20 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none"
+          className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-black/80 hover:bg-rose-600 text-white border border-white/20 transition shadow-2xl cursor-pointer focus:ring-4 focus:ring-rose-500 focus:outline-none touch-manipulation"
           title="Fechar detalhes (Esc)"
           aria-label="Fechar"
         >
           <X size={20} />
         </button>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar pb-12">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-12 w-full max-w-full">
           {/* 1. Hero Backdrop no Padrão Amazon Prime Video TV */}
           <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[480px] bg-zinc-950 overflow-hidden">
             {currentItem.backdropPath || currentItem.posterPath ? (
@@ -632,9 +632,9 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
 
           {/* 2. Se for Série: Seletor de Temporadas e Cards de Episódios em Formato Horizontal 16:9 */}
           {isTv && (
-            <div className="px-6 sm:px-10 mt-8 space-y-6">
+            <div className="px-6 sm:px-10 mt-8 space-y-6 w-full max-w-full overflow-hidden">
               {/* Seletor de Temporadas */}
-              <div className="flex items-center gap-2 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-2 border-b border-white/10 pb-4 overflow-x-auto no-scrollbar touch-pan-x">
                 {(details?.seasons || [{ seasonNumber: 1, name: 'Temporada 1', episodeCount: 8 }]).map((s) => (
                   <button
                     key={s.seasonNumber}
@@ -852,7 +852,7 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
 
           {/* 3. Recomendações: "Os clientes também assistiram" (Cards 16:9 estilo Screenshot 2) */}
           {recommendations.length > 0 && (
-            <div className="px-6 sm:px-10 mt-10 space-y-4">
+            <div className="px-6 sm:px-10 mt-10 space-y-4 w-full max-w-full overflow-hidden">
               <div className="flex items-center justify-between">
                 <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
                   Os clientes também assistiram

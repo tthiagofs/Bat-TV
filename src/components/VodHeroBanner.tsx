@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { getTrendingMovies, getTrendingSeries, searchTmdbItem, type TmdbItem } from '../services/tmdbService'
 import type { MediaItem } from '../types'
 import CatalogHeroBanner from './CatalogHeroBanner'
+import MobileHeroBanner from './mobile/MobileHeroBanner'
+import { useIsMobile } from '../hooks/useIsMobile'
+import { usePlayback } from '../context/PlaybackContext'
 
 interface Props {
   type: 'movies' | 'series'
@@ -150,6 +153,26 @@ export default function VodHeroBanner({ type, onOpenDetails, isActive = true }: 
     return type === 'movies'
       ? `Top ${idx + 1} em Filmes Mais Assistidos`
       : `Top ${idx + 1} em Séries Mais Assistidas`
+  }
+
+  const isMobile = useIsMobile(768)
+  const { play } = usePlayback()
+
+  if (isMobile) {
+    return (
+      <MobileHeroBanner
+        key={type}
+        items={items}
+        onOpenDetails={onOpenDetails}
+        onPlay={(hero) => {
+          if (hero.mediaItem) {
+            play(hero.mediaItem)
+          } else {
+            onOpenDetails(hero)
+          }
+        }}
+      />
+    )
   }
 
   return (

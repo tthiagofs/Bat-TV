@@ -186,7 +186,9 @@ export default function Player({
     if (typeof window === 'undefined') return false
     return window.innerHeight > window.innerWidth
   })
-  const [forceLandscape, setForceLandscape] = useState(true)
+  const [forceLandscape, setForceLandscape] = useState(false)
+  const [isDraggingProgress, setIsDraggingProgress] = useState(false)
+  const [dragProgressVal, setDragProgressVal] = useState<number | null>(null)
 
   useEffect(() => {
     const handleOrientation = () => {
@@ -566,8 +568,14 @@ export default function Player({
   }, [volume, muted, isNative])
 
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) document.exitFullscreen()
-    else containerRef.current?.requestFullscreen()
+    const v = videoRef.current as any
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    } else if (containerRef.current?.requestFullscreen) {
+      containerRef.current.requestFullscreen().catch(() => {})
+    } else if (v && v.webkitEnterFullscreen) {
+      v.webkitEnterFullscreen()
+    }
   }, [])
 
   const togglePlay = useCallback(() => {
@@ -586,7 +594,20 @@ export default function Player({
   useEffect(() => {
     const onFs = () => setFullscreen(!!document.fullscreenElement)
     document.addEventListener('fullscreenchange', onFs)
-    return () => document.removeEventListener('fullscreenchange', onFs)
+    const v = videoRef.current as any
+    const onWebkitBegin = () => setFullscreen(true)
+    const onWebkitEnd = () => setFullscreen(false)
+    if (v) {
+      v.addEventListener('webkitbeginfullscreen', onWebkitBegin)
+      v.addEventListener('webkitendfullscreen', onWebkitEnd)
+    }
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs)
+      if (v) {
+        v.removeEventListener('webkitbeginfullscreen', onWebkitBegin)
+        v.removeEventListener('webkitendfullscreen', onWebkitEnd)
+      }
+    }
   }, [])
 
   const BOTTOM_CONTROL_IDS = [
@@ -1216,7 +1237,9 @@ export default function Player({
           onTimeUpdate={(e) => {
             const { currentTime, duration } = e.currentTarget
             lastPos.current = { pos: currentTime, dur: isFinite(duration) ? duration : 0 }
-            setTime({ current: currentTime, duration })
+            if (!isDraggingProgress) {
+              setTime({ current: currentTime, duration })
+            }
           }}
           onLoadedMetadata={(e) => { if (startAt > 0 && !isLive) e.currentTarget.currentTime = startAt }}
           className={`w-full h-full relative z-0 ${aspect === 'cover' ? 'object-cover' : 'object-contain'}`}
@@ -1279,8 +1302,27 @@ export default function Player({
         </div>
       )}
 
+      {/* Botão de Fechar Sempre Acessível e Fora do Dynamic Island / Notch */}
+      <button
+        type="button"
+        id="player-always-close"
+        onClick={(e) => {
+          e.stopPropagation()
+          onClose()
+        }}
+        className="fixed z-50 p-2.5 sm:p-3 rounded-full bg-black/85 hover:bg-rose-600 text-white border border-white/25 shadow-2xl backdrop-blur-md active:scale-90 transition cursor-pointer touch-manipulation"
+        style={{
+          top: 'max(env(safe-area-inset-top, 0px), 14px)',
+          left: 'max(env(safe-area-inset-left, 0px), 14px)',
+        }}
+        title="Fechar e Voltar"
+        aria-label="Fechar"
+      >
+        <X size={20} className="text-white" />
+      </button>
+
       {/* Barra superior */}
-      <div className={`absolute top-0 inset-x-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-4 bg-gradient-to-b from-black/85 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`absolute top-0 inset-x-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-6 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2 sm:pb-4 pl-[max(env(safe-area-inset-left,0px),3.5rem)] sm:pl-6 bg-gradient-to-b from-black/85 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button id="player-close" onClick={onClose} className={btn} aria-label="Fechar (Esc)" title="Fechar (Esc)">
           <X size={20} className="sm:w-[22px] sm:h-[22px]" />
         </button>
@@ -1304,7 +1346,7 @@ export default function Player({
       </div>
 
       {/* Controles inferiores */}
-      <div className={`absolute bottom-0 inset-x-0 px-3 sm:px-6 pb-2.5 sm:pb-4 pt-6 sm:pt-10 bg-gradient-to-t from-black/95 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`absolute bottom-0 inset-x-0 px-3 sm:px-6 pb-[max(env(safe-area-inset-bottom,0px),1rem)] pt-6 sm:pt-10 bg-gradient-to-t from-black/95 to-transparent transition-opacity duration-300 z-30 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         {isLive && epg.length > 0 && (
           <div className="mb-2 max-w-xl text-xs sm:text-sm">
             {current && (
@@ -1331,7 +1373,7 @@ export default function Player({
         )}
         {!isLive && (
           <div className="flex items-center gap-2 sm:gap-3 mb-1.5 text-[11px] sm:text-xs text-zinc-300">
-            <span className="w-10 sm:w-14 text-right tabular-nums font-semibold">{fmt(time.current)}</span>
+            <span className="w-10 sm:w-14 text-right tabular-nums font-semibold">{fmt(dragProgressVal !== null ? dragProgressVal : time.current)}</span>
             <input
               id="player-progress"
               tabIndex={0}
@@ -1339,15 +1381,32 @@ export default function Player({
               min={0}
               max={time.duration || 0}
               step={1}
-              value={time.current}
+              value={dragProgressVal !== null ? dragProgressVal : time.current}
+              onPointerDown={() => setIsDraggingProgress(true)}
+              onTouchStart={() => setIsDraggingProgress(true)}
+              onInput={(e) => {
+                const target = Number(e.currentTarget.value)
+                setDragProgressVal(target)
+              }}
               onChange={(e) => {
                 const target = Number(e.target.value)
+                setDragProgressVal(null)
+                setIsDraggingProgress(false)
                 if (isNative) {
                   NativePlayer.seekTo({ position: target }).catch(() => {})
                   setTime((prev) => ({ ...prev, current: target }))
                 } else if (videoRef.current) {
                   videoRef.current.currentTime = target
+                  setTime((prev) => ({ ...prev, current: target }))
                 }
+              }}
+              onPointerUp={() => {
+                setIsDraggingProgress(false)
+                setDragProgressVal(null)
+              }}
+              onTouchEnd={() => {
+                setIsDraggingProgress(false)
+                setDragProgressVal(null)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowLeft') {
@@ -1358,7 +1417,7 @@ export default function Player({
                   seekRelative(10)
                 }
               }}
-              className="flex-1 accent-rose-500 cursor-pointer h-2 sm:h-2.5 rounded-lg bg-zinc-700 focus:ring-4 focus:ring-rose-500 focus:outline-none transition-all"
+              className="flex-1 accent-rose-500 cursor-pointer h-2.5 sm:h-2.5 rounded-lg bg-zinc-700 focus:ring-4 focus:ring-rose-500 focus:outline-none transition-all touch-manipulation"
               aria-label="Progresso do vídeo"
             />
             <span className="w-10 sm:w-14 tabular-nums font-semibold">{fmt(time.duration)}</span>

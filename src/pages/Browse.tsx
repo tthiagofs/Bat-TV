@@ -274,7 +274,7 @@ export default function Browse({ section, query, isActive = true, onScrollChange
     <div
       ref={containerRef}
       onScroll={(e) => onScrollChange?.(e.currentTarget.scrollTop > 10)}
-      className={`h-full overflow-y-auto no-scrollbar bg-zinc-950 text-zinc-100 pb-24 ${
+      className={`h-full w-full max-w-full overflow-y-auto overflow-x-hidden no-scrollbar bg-zinc-950 text-zinc-100 pb-24 ${
         hasHeroBanner ? '' : 'pt-16'
       }`}
     >

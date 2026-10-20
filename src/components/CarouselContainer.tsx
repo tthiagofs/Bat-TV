@@ -15,7 +15,7 @@ export default function CarouselContainer({ children, className = '', scrollAmou
   }
 
   return (
-    <div className="relative group/carousel select-none">
+    <div className="relative group/carousel select-none w-full max-w-full overflow-hidden">
       {/* Seta Lateral Esquerda estilo Netflix / Prime Video (Apenas Mouse / Desktop) */}
       <button
         type="button"
@@ -24,17 +24,17 @@ export default function CarouselContainer({ children, className = '', scrollAmou
         aria-hidden="true"
         onClick={() => handleScroll(-scrollAmount)}
         aria-label="Voltar carrossel"
-        className="absolute -left-3 top-1/2 -translate-y-1/2 z-20 h-full w-14 bg-gradient-to-r from-black/95 via-black/50 to-transparent flex items-center justify-start pl-1 text-white opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-300 cursor-pointer pointer-events-none group-hover/carousel:pointer-events-auto"
+        className="absolute left-0 top-1/2 -translate-y-1/2 z-20 h-full w-14 bg-gradient-to-r from-black/95 via-black/50 to-transparent flex items-center justify-start pl-1 text-white opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-300 cursor-pointer pointer-events-none group-hover/carousel:pointer-events-auto"
       >
         <div className="p-2.5 rounded-full bg-zinc-950/85 hover:bg-black text-white border border-zinc-700/80 shadow-2xl backdrop-blur-md hover:scale-110 active:scale-95 transition-all">
           <ChevronLeft size={22} />
         </div>
       </button>
 
-      {/* Conteúdo com Scroll Horizontal Suave e Espaço para Minitela Expandida sem Cortes */}
+      {/* Conteúdo com Scroll Horizontal Suave estritamente contido no eixo X */}
       <div
         ref={scrollRef}
-        className={`flex gap-4 overflow-x-auto py-8 -my-8 px-3 -mx-3 no-scrollbar scroll-smooth ${className}`}
+        className={`flex gap-4 overflow-x-auto py-2 px-1 no-scrollbar scroll-smooth w-full max-w-full touch-pan-x overscroll-x-contain ${className}`}
       >
         {children}
       </div>

@@ -157,7 +157,7 @@ function SportsHubBase({ onNavigate }: SportsHubProps) {
   }, [leagueFilter, brasileiraoMatches, copaDoBrasilMatches, libertadoresSulAmericanaMatches, championsEuropaMatches, otherLeaguesMatches])
 
   return (
-    <div className="flex-1 overflow-y-auto no-scrollbar bg-zinc-950 pb-24">
+    <div className="flex-1 w-full max-w-full overflow-y-auto overflow-x-hidden no-scrollbar bg-zinc-950 pb-24">
       {/* 1. Hero Banner no Topo (Partidas em Destaque com Estádio de Futebol) */}
       <SportsHeroBanner matches={allMatches} />
 

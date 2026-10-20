@@ -1,4 +1,4 @@
-import { Search, Cast, User } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import batLogo from '../../assets/logo.png'
@@ -71,52 +71,6 @@ export default function MobileTopBar({
           </button>
         </div>
       </div>
-
-      {/* Chips de Categorias estilo Netflix */}
-      {!search && (
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-          <button
-            onClick={() => onSelectSection('series')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-              activeSection === 'series'
-                ? 'bg-white text-zinc-950 font-bold'
-                : 'bg-zinc-900/80 text-zinc-300 border border-white/10'
-            }`}
-          >
-            Séries
-          </button>
-          <button
-            onClick={() => onSelectSection('movies')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-              activeSection === 'movies'
-                ? 'bg-white text-zinc-950 font-bold'
-                : 'bg-zinc-900/80 text-zinc-300 border border-white/10'
-            }`}
-          >
-            Filmes
-          </button>
-          <button
-            onClick={() => onSelectSection('sports')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-              activeSection === 'sports'
-                ? 'bg-white text-zinc-950 font-bold'
-                : 'bg-zinc-900/80 text-zinc-300 border border-white/10'
-            }`}
-          >
-            ⚽ Esportes
-          </button>
-          <button
-            onClick={() => onSelectSection('live')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
-              activeSection === 'live'
-                ? 'bg-white text-zinc-950 font-bold'
-                : 'bg-zinc-900/80 text-zinc-300 border border-white/10'
-            }`}
-          >
-            Ao Vivo
-          </button>
-        </div>
-      )}
     </header>
   )
 }
