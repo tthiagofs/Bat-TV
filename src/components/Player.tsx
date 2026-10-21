@@ -647,8 +647,14 @@ export default function Player({
     return () => {
       hls?.destroy()
       hlsRef.current = null
-      video.removeAttribute('src')
-      video.load()
+      if (video) {
+        try {
+          video.pause()
+          video.removeAttribute('src')
+          video.src = ''
+          video.load()
+        } catch {}
+      }
     }
   }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode])
 
@@ -1400,6 +1406,8 @@ export default function Player({
           }}
           onPause={() => setPlaying(false)}
           onWaiting={() => setBuffering(true)}
+          onSeeking={() => setBuffering(true)}
+          onSeeked={() => setBuffering(false)}
           onPlaying={() => {
             setBuffering(false)
             setPlaying(true)
