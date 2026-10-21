@@ -507,7 +507,19 @@ export async function getTodayMainLeaguesGames(): Promise<Match[]> {
   inFlightSportsFetch = (async () => {
     const leagueSlugs = Object.keys(MAIN_LEAGUES)
 
-    // 1. Busca os scoreboards atuais de todas as ligas simultaneamente em paralelo
+    // 1. Gera as datas dos próximos 10 dias em formato YYYYMMDD
+    const now = Date.now()
+    const tenDays = now + 10 * 24 * 3600_000
+    const next10Dates: string[] = []
+    for (let i = 0; i <= 10; i++) {
+      const dt = new Date(now + i * 24 * 3600_000)
+      const y = dt.getUTCFullYear()
+      const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
+      const d = String(dt.getUTCDate()).padStart(2, '0')
+      next10Dates.push(`${y}${m}${d}`)
+    }
+
+    // 2. Busca o placar de hoje e as rodadas dos próximos 10 dias de todas as ligas
     const promises = leagueSlugs.map(async (slug) => {
       try {
         const data = await fetchEspnJson<{ events?: Json[]; leagues?: Json[] }>(
@@ -517,32 +529,44 @@ export async function getTodayMainLeaguesGames(): Promise<Match[]> {
         const events = data.events || []
         const parsed = events.map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
 
-        // Se houver poucas partidas e calendário com data futura próxima (próximos 5 dias), busca 1 data adicional
+        // Extrai todas as datas agendadas nos próximos 10 dias a partir do calendário oficial da liga
         const calendar = data.leagues?.[0]?.calendar || []
-        const now = Date.now()
-        const fiveDays = now + 5 * 24 * 3600_000
+        const targetDates = new Set<string>()
 
-        if (Array.isArray(calendar) && typeof calendar[0] === 'string' && parsed.length < 5) {
-          const futureDates = (calendar as string[])
-            .map((d) => d.slice(0, 10).replace(/-/g, ''))
-            .filter((dStr) => {
-              const y = Number(dStr.slice(0, 4))
-              const m = Number(dStr.slice(4, 6)) - 1
-              const day = Number(dStr.slice(6, 8))
-              const dt = new Date(Date.UTC(y, m, day)).getTime()
-              return dt > now && dt <= fiveDays
-            })
-            .slice(0, 1)
+        if (Array.isArray(calendar)) {
+          for (const item of calendar) {
+            if (typeof item === 'string') {
+              const dt = new Date(item).getTime()
+              if (dt >= now - 12 * 3600_000 && dt <= tenDays) {
+                targetDates.add(item.slice(0, 10).replace(/-/g, ''))
+              }
+            }
+          }
+        }
 
-          if (futureDates.length > 0) {
+        // Para torneios eliminatórios (Libertadores, Sul-Americana, Copa do Brasil) ou ligas sem array puro de strings
+        if (targetDates.size === 0 || slug.includes('libertadores') || slug.includes('sudamericana') || slug.includes('copa')) {
+          // Busca os próximos 7 dias úteis de jogos
+          next10Dates.slice(1, 8).forEach((dStr) => targetDates.add(dStr))
+        }
+
+        // Dispara as consultas de datas em paralelo
+        if (targetDates.size > 0) {
+          const datePromises = Array.from(targetDates).map(async (dStr) => {
             try {
               const dateData = await fetchEspnJson<{ events?: Json[] }>(
-                `${ESPN_BASE}/${slug}/scoreboard?dates=${futureDates[0]}`,
-                300_000
+                `${ESPN_BASE}/${slug}/scoreboard?dates=${dStr}`,
+                180_000 // Cache de 3 minutos para datas futuras
               )
-              const dateEvents = (dateData.events || []).map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
-              parsed.push(...dateEvents)
-            } catch {}
+              return (dateData.events || []).map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
+            } catch {
+              return [] as Match[]
+            }
+          })
+
+          const dateResults = await Promise.all(datePromises)
+          for (const list of dateResults) {
+            parsed.push(...list)
           }
         }
 
