@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { Play, Info, Star, ChevronLeft, ChevronRight, Loader2, Sparkles, Volume2, VolumeX } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { Play, Info, Star, ChevronLeft, ChevronRight, Loader2, Sparkles, Volume2, VolumeX, Plus, Check } from 'lucide-react'
 import { getTrailerKey, getTrailerKeyByTitle, type TmdbItem } from '../services/tmdbService'
 import { useAuth } from '../context/AuthContext'
 import { usePlayback } from '../context/PlaybackContext'
+import { useFavorites } from '../context/FavoritesContext'
 import { searchTitleInCatalog } from '../services/catalog'
 import { useTrailerSync } from '../hooks/useTrailerSync'
 
@@ -231,6 +232,49 @@ export default function CatalogHeroBanner({
     }
   }
 
+  const { isFavorite, toggle } = useFavorites()
+  const [addingFav, setAddingFav] = useState(false)
+
+  const isCurrentFavorite = useMemo(() => {
+    if (!current) return false
+    if (current.mediaItem) return isFavorite(current.mediaItem.key)
+    return isFavorite(`tmdb:${current.id}`) || isFavorite(`movies:${current.id}`) || isFavorite(`series:${current.id}`)
+  }, [current, isFavorite])
+
+  const handleToggleFavorite = async () => {
+    if (!current) return
+    if (current.mediaItem) {
+      toggle(current.mediaItem)
+      return
+    }
+
+    // Se ainda não temos o mediaItem mapeado, tenta localizar no catálogo para vincular direto
+    setAddingFav(true)
+    try {
+      if (service) {
+        const type = current.mediaType === 'movie' ? 'movies' : 'series'
+        const found = await searchTitleInCatalog(service, type, current)
+        if (found) {
+          toggle(found)
+          setAddingFav(false)
+          return
+        }
+      }
+    } catch {}
+
+    // Fallback: adiciona à lista com objeto MediaItem compatível
+    const fallbackItem = {
+      key: `tmdb:${current.id}`,
+      type: (current.mediaType === 'movie' ? 'movies' : 'series') as any,
+      id: current.id,
+      name: current.title,
+      image: current.posterPath || current.backdropPath || '',
+      rating: String(current.voteAverage || ''),
+    }
+    toggle(fallbackItem)
+    setAddingFav(false)
+  }
+
   const [isBannerFocused, setIsBannerFocused] = useState(false)
 
   if (items.length === 0 || !current) return null
@@ -430,6 +474,26 @@ export default function CatalogHeroBanner({
               <Play size={16} className="fill-black text-black" />
             )}
             <span>Assistir Agora</span>
+          </button>
+
+          <button
+            tabIndex={0}
+            disabled={addingFav}
+            onClick={handleToggleFavorite}
+            className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-xl border font-bold text-xs sm:text-sm shadow-xl transition backdrop-blur-md focus:scale-105 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer touch-manipulation active:scale-95 ${
+              isCurrentFavorite
+                ? 'bg-rose-600/20 text-rose-400 border-rose-500/40 hover:bg-rose-600/30'
+                : 'bg-zinc-800/80 hover:bg-zinc-700/80 border-zinc-600/60 text-white'
+            }`}
+          >
+            {addingFav ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : isCurrentFavorite ? (
+              <Check size={16} className="text-rose-400" />
+            ) : (
+              <Plus size={16} />
+            )}
+            <span>{isCurrentFavorite ? 'Na Minha Lista' : 'Minha Lista'}</span>
           </button>
 
           <button

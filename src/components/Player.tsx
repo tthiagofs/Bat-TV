@@ -567,10 +567,14 @@ export default function Player({
       })
     } else {
       video.src = streamUrl
+      video.preload = 'auto'
       video.load()
-      video.play().catch((err) => {
-        console.warn('Erro ao reproduzir via tag video:', err)
-      })
+      const playPromise = video.play()
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Erro ao reproduzir via tag video:', err)
+        })
+      }
     }
     return () => {
       hls?.destroy()
@@ -578,7 +582,7 @@ export default function Player({
       video.removeAttribute('src')
       video.load()
     }
-  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode, handlePlayNextEpisode])
+  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode])
 
   useEffect(() => {
     if (isNative) {

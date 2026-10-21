@@ -128,8 +128,28 @@ function PrimeHeaderBase({
       </div>
 
 
-      {/* Direita: Busca Global, Favoritos, Lista Ativa & Perfil */}
+      {/* Direita: Minha Lista, Busca Global, Favoritos, Lista Ativa & Perfil */}
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Botão 'Minha Lista' dedicado ao lado esquerdo da barra de pesquisa */}
+        <button
+          type="button"
+          id="header-my-list-btn"
+          tabIndex={0}
+          onClick={() => {
+            onSelectSection('favorites')
+            onSearchChange('')
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-rose-500 cursor-pointer ${
+            activeSection === 'favorites' && !search
+              ? 'bg-rose-600 text-white shadow-md shadow-rose-950/60'
+              : 'text-zinc-300 hover:text-white hover:bg-white/10 border border-white/10'
+          }`}
+          title="Ver Minha Lista"
+        >
+          <Star size={14} className={activeSection === 'favorites' ? 'fill-white' : 'text-amber-400 fill-amber-400'} />
+          <span className="hidden md:inline">Minha Lista</span>
+        </button>
+
         {/* Barra de Busca Dinâmica */}
         <div className="relative">
           {showSearchInput || search ? (

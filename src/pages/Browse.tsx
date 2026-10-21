@@ -500,6 +500,43 @@ export default function Browse({ section, query, isActive = true, onScrollChange
         <div className="flex-1 p-6 sm:px-10 lg:px-14 pt-6 sm:pt-8">
           {(error || playError) && <p className="text-rose-400 mb-4">{error || playError}</p>}
 
+          {isFav && !searching && (
+            <div className="mb-6 pb-4 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                  <Star size={22} className="text-amber-400 fill-amber-400" />
+                  <span>Minha Lista</span>
+                </h1>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Seus filmes, séries e canais salvos neste perfil ({visible.length} {visible.length === 1 ? 'item' : 'itens'})
+                </p>
+              </div>
+
+              {visible.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-zinc-500 font-semibold text-[11px] uppercase tracking-wider">Ordenar:</span>
+                  <button
+                    onClick={() => setSortBy('default')}
+                    className={`px-3 py-1 rounded-lg transition font-medium cursor-pointer ${
+                      sortBy === 'default' ? 'bg-white/15 text-white font-bold' : 'hover:text-white hover:bg-white/5 text-zinc-400'
+                    }`}
+                  >
+                    Adicionados
+                  </button>
+                  <button
+                    onClick={() => setSortBy('alphabetical')}
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg transition font-medium cursor-pointer ${
+                      sortBy === 'alphabetical' ? 'bg-white/15 text-white font-bold' : 'hover:text-white hover:bg-white/5 text-zinc-400'
+                    }`}
+                  >
+                    <ArrowDownAZ size={13} />
+                    <span>A-Z</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex flex-col items-center justify-center py-28 text-zinc-500">
               <Loader2 className="animate-spin text-rose-500 mb-3" size={32} />
@@ -507,10 +544,10 @@ export default function Browse({ section, query, isActive = true, onScrollChange
             </div>
           ) : visible.length === 0 ? (
             <div className="flex flex-col items-center mt-24 text-zinc-500 gap-3">
-              {isFav ? <Star size={40} /> : <SearchX size={40} />}
+              {isFav ? <Star size={40} className="text-zinc-600" /> : <SearchX size={40} />}
               <p className="text-sm">
                 {isFav && !searching
-                  ? 'Você ainda não tem favoritos neste perfil. Clique na estrela ou em "+" de um título.'
+                  ? 'Você ainda não tem itens salvos na sua lista. Clique em "Minha Lista" nos banners ou no card de qualquer filme ou série para salvar aqui.'
                   : 'Nenhum resultado encontrado.'}
               </p>
             </div>

@@ -147,8 +147,18 @@ export default function MobileHeroBanner({ items, onOpenDetails, onPlay }: Props
           {/* Botão Minha Lista */}
           <button
             onClick={() => {
-              if (current.mediaItem) toggle(current.mediaItem)
-              else onOpenDetails(current)
+              if (current.mediaItem) {
+                toggle(current.mediaItem)
+              } else {
+                toggle({
+                  key: `tmdb:${current.id}`,
+                  type: (current.mediaType === 'tv' ? 'series' : 'movies') as any,
+                  id: current.id,
+                  name: current.title,
+                  image: current.posterPath || current.backdropPath || '',
+                  rating: String(current.voteAverage || ''),
+                })
+              }
             }}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-zinc-800/90 text-white border border-white/20 font-bold text-sm active:scale-95 transition cursor-pointer touch-manipulation"
           >

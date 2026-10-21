@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Search, Star } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import batLogo from '../../assets/logo.png'
@@ -39,7 +39,24 @@ export default function MobileTopBar({
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Botão Minha Lista (Mobile) */}
+          <button
+            onClick={() => {
+              onSelectSection('favorites')
+              onSearchChange('')
+            }}
+            className={`p-1.5 rounded-full transition cursor-pointer active:scale-90 ${
+              activeSection === 'favorites' && !search
+                ? 'bg-rose-600/20 text-rose-400'
+                : 'text-zinc-300 hover:text-white'
+            }`}
+            aria-label="Minha Lista"
+            title="Minha Lista"
+          >
+            <Star size={19} className={activeSection === 'favorites' ? 'fill-rose-500 text-rose-500' : 'text-amber-400 fill-amber-400/40'} />
+          </button>
+
           {/* Botão de Busca */}
           <div className="relative flex items-center">
             {search ? (
