@@ -35,7 +35,9 @@ export default function MobileHeroBanner({ items, onOpenDetails, onPlay }: Props
     ? `${TMDB_IMAGE_ORIGINAL}${current.backdropPath}`
     : ''
 
-  const isFav = current.mediaItem ? isFavorite(current.mediaItem.key) : false
+  const isFav = current.mediaItem
+    ? isFavorite(current.mediaItem.key)
+    : isFavorite(`tmdb:${current.id}`) || isFavorite(`movies:${current.id}`) || isFavorite(`series:${current.id}`)
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.targetTouches[0].clientX

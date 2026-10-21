@@ -88,15 +88,23 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 2. Não intercepta streams externos que não sejam GET
+  // 2. Não intercepta streams de vídeo, proxies ou APIs externas (permite streaming HTTP nativo)
   if (event.request.method !== 'GET') return
   if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/iptv-proxy') ||
+    url.searchParams.has('url') ||
     url.pathname.endsWith('.m3u8') ||
     url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.mp4') ||
+    url.pathname.endsWith('.mkv') ||
     url.pathname.includes('/live/') ||
     url.pathname.includes('/movie/') ||
     url.pathname.includes('/series/') ||
-    url.hostname.includes('site.api.espn.com')
+    url.hostname.includes('workers.dev') ||
+    url.hostname.includes('site.api.espn.com') ||
+    url.hostname.includes('themoviedb.org') ||
+    url.hostname.includes('tmdb.org')
   ) {
     return
   }

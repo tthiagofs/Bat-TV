@@ -161,10 +161,12 @@ export default function Player({
   const [retryKey, setRetryKey] = useState(0)
   const [activeUrl, setActiveUrl] = useState(url)
   const [streamAttempt, setStreamAttempt] = useState<'m3u8' | 'ts'>('m3u8')
+  const [hasAutoTriedExt, setHasAutoTriedExt] = useState(false)
 
   useEffect(() => {
     setActiveUrl(url)
     setStreamAttempt('m3u8')
+    setHasAutoTriedExt(false)
   }, [url])
 
   const toggleVodFormat = useCallback(() => {
@@ -1332,13 +1334,37 @@ export default function Player({
               setStreamAttempt('ts')
               return
             }
+
             const videoEl = e.currentTarget
             const mediaErr = videoEl.error
+
+            // 1. Ignora cancelamentos intencionais do navegador (código 1 = MEDIA_ERR_ABORTED ao dar seek)
+            if (mediaErr && mediaErr.code === 1) {
+              return
+            }
+
+            // 2. Se o usuário estiver arrastando a barra ou no meio do seek, não dispara erro
+            if (isDraggingProgress || videoEl.seeking) {
+              return
+            }
+
+            // 3. Se for falha real no início da reprodução, tenta automaticamente o formato alternativo (.mp4 <-> .mkv)
+            if (!isLive && !hasAutoTriedExt && time.current < 5 && (activeUrl.endsWith('.mp4') || activeUrl.endsWith('.mkv'))) {
+              setHasAutoTriedExt(true)
+              const nextUrl = activeUrl.endsWith('.mp4')
+                ? activeUrl.replace(/\.mp4$/, '.mkv')
+                : activeUrl.replace(/\.mkv$/, '.mp4')
+              console.warn(`Formato VOD falhou no início. Tentando alternativo: ${nextUrl}`)
+              setActiveUrl(nextUrl)
+              setRetryKey((k) => k + 1)
+              return
+            }
+
             let msg = 'Não foi possível reproduzir este conteúdo.'
             if (mediaErr) {
               if (mediaErr.code === 2) msg = 'Falha de conexão com o servidor de transmissão.'
-              else if (mediaErr.code === 3) msg = 'Codec de áudio ou vídeo não suportado pelo aparelho.'
-              else if (mediaErr.code === 4) msg = 'Formato de vídeo incompatível ou link expirado.'
+              else if (mediaErr.code === 3) msg = 'Codec de áudio ou vídeo incompatível ou resposta inválida do servidor.'
+              else if (mediaErr.code === 4) msg = 'Formato de vídeo incompatível ou link expirado (404).'
             }
             setBuffering(false)
             setError(msg)

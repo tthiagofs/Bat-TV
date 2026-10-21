@@ -113,6 +113,14 @@ function iptvDevProxy(): Plugin {
               }
             )
 
+            const abortUpstream = () => {
+              try {
+                proxyReq.destroy()
+              } catch {}
+            }
+            req.on('close', abortUpstream)
+            res.on('close', abortUpstream)
+
             proxyReq.on('error', (err) => {
               res.statusCode = 500
               res.setHeader('Access-Control-Allow-Origin', '*')

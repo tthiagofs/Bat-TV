@@ -68,17 +68,25 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
   const isTv = currentItem.mediaType === 'tv'
 
   // Sistema de Favoritos / Minha Lista
-  const itemMediaKey = `${isTv ? 'series' : 'movies'}:${currentItem.id}`
+  const itemMediaKey = currentItem.mediaItem ? currentItem.mediaItem.key : `${isTv ? 'series' : 'movies'}:${currentItem.id}`
   const inWatchlist = useMemo(() => {
     const curTitle = cleanTitle(currentItem.title)
     return favorites.some(
-      (f) => f.key === itemMediaKey || cleanTitle(f.name) === curTitle
+      (f) =>
+        f.key === itemMediaKey ||
+        f.key === `tmdb:${currentItem.id}` ||
+        (currentItem.mediaItem && f.key === currentItem.mediaItem.key) ||
+        cleanTitle(f.name) === curTitle
     )
-  }, [favorites, itemMediaKey, currentItem.title])
+  }, [favorites, itemMediaKey, currentItem.title, currentItem.id, currentItem.mediaItem])
 
   const handleToggleWatchlist = () => {
+    if (currentItem.mediaItem) {
+      toggle(currentItem.mediaItem)
+      return
+    }
     const mediaItem: MediaItem = {
-      key: itemMediaKey,
+      key: `tmdb:${currentItem.id}`,
       type: isTv ? 'series' : 'movies',
       id: currentItem.id,
       name: currentItem.title,
@@ -263,8 +271,12 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
     const sNum = isTv ? (seasonNum ?? selectedSeason) : undefined
     const epNum = isTv ? (episodeNum ?? activeEpisode?.episodeNumber ?? 1) : undefined
 
-    // Se já tiver o item original do IPTV, reproduz imediatamente com temporada/episódio!
-    if (currentItem.mediaItem) {
+    // Se já tiver o item original do IPTV (e não for TMDB não resolvido), reproduz imediatamente com temporada/episódio!
+    if (
+      currentItem.mediaItem &&
+      !currentItem.mediaItem.key.startsWith('tmdb:') &&
+      (currentItem.mediaItem.type === 'live' || currentItem.mediaItem.ext)
+    ) {
       onClose()
       play(currentItem.mediaItem, {
         seasonNumber: sNum,

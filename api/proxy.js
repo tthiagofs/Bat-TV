@@ -1,8 +1,8 @@
 import http from 'node:http'
 import https from 'node:https'
 
-const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 50, timeout: 20000 })
-const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 50, timeout: 20000 })
+const agentHttp = new http.Agent({ keepAlive: false })
+const agentHttps = new https.Agent({ keepAlive: false })
 
 export default function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
@@ -16,9 +16,17 @@ export default function handler(req, res) {
     return res.status(200).end()
   }
 
-  const urlParam = req.query?.url
+  let urlParam = req.query?.url
+  if (Array.isArray(urlParam)) urlParam = urlParam[0]
+  if (!urlParam && req.url) {
+    try {
+      const parsedReq = new URL(req.url, 'http://localhost')
+      urlParam = parsedReq.searchParams.get('url')
+    } catch {}
+  }
   if (!urlParam) {
     res.statusCode = 400
+    res.setHeader('Content-Type', 'application/json')
     return res.end(JSON.stringify({ error: 'Parâmetro url é obrigatório' }))
   }
 
@@ -123,6 +131,14 @@ export default function handler(req, res) {
           proxyRes.pipe(res)
         }
       )
+
+      req.on('close', () => {
+        if (!res.writableEnded) {
+          try {
+            proxyReq.destroy()
+          } catch {}
+        }
+      })
 
       proxyReq.setTimeout(25000, () => {
         proxyReq.destroy()

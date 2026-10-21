@@ -35,25 +35,45 @@ export default function MobileHome({ onNavigate }: Props) {
       }
     })
 
-    // 2. Busca catálogo do servidor IPTV
+    // 2. Busca catálogo do servidor IPTV com carregamento progressivo e rápido
     if (service) {
       const genres = profile?.preferredGenres || []
       const likedNames = (profile?.favorites || []).map((f) => f.name)
+      const hasPrefs = genres.length > 0 || likedNames.length > 0
 
-      Promise.all([
-        getRecommendedItems(service, 'movies', genres, likedNames, 20),
-        getRecommendedItems(service, 'series', genres, likedNames, 20),
-        getPreviewItems(service, 'live', 15),
-      ])
-        .then(([m, s, l]) => {
+      const fetchMovies = hasPrefs
+        ? getRecommendedItems(service, 'movies', genres, likedNames, 16)
+        : getPreviewItems(service, 'movies', 16)
+
+      const fetchSeries = hasPrefs
+        ? getRecommendedItems(service, 'series', genres, likedNames, 16)
+        : getPreviewItems(service, 'series', 16)
+
+      const fetchLive = getPreviewItems(service, 'live', 15)
+
+      fetchMovies
+        .then((m) => {
           if (!isCurrent) return
           setMovies(m)
+          setLoading(false)
+        })
+        .catch(() => {})
+
+      fetchSeries
+        .then((s) => {
+          if (!isCurrent) return
           setSeries(s)
+          setLoading(false)
+        })
+        .catch(() => {})
+
+      fetchLive
+        .then((l) => {
+          if (!isCurrent) return
           setLive(l)
+          setLoading(false)
         })
-        .finally(() => {
-          if (isCurrent) setLoading(false)
-        })
+        .catch(() => {})
     }
 
     return () => {

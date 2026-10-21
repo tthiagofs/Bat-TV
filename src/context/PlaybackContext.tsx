@@ -6,6 +6,7 @@ import { useProfiles } from './ProfileContext'
 import type { MediaItem } from '../types'
 import type { HistoryEntry } from '../services/profileDb'
 import { trailerCoordinator } from '../services/trailerCoordinator'
+import { searchTitleInCatalog } from '../services/catalog'
 
 interface PlayOpts {
   /** Lista usada na troca rápida de canais (ao vivo) */
@@ -66,23 +67,56 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       saved.position / saved.duration > 0.02 && saved.position / saved.duration < 0.95
     const startAt = resumable ? saved.position : 0
 
-    if (item.type === 'live') {
+    let activeItem = item
+
+    // Se o item veio do TMDB ou foi salvo na Minha Lista sem ID/extensão real do IPTV, resolve no catálogo
+    const needsCatalogLookup =
+      activeItem.key.startsWith('tmdb:') ||
+      (activeItem.type === 'movies' && !activeItem.ext) ||
+      (activeItem.type === 'series' && activeItem.key.startsWith('tmdb:'))
+
+    if (needsCatalogLookup && (activeItem.type === 'movies' || activeItem.type === 'series')) {
+      setOpeningMediaTitle(`Localizando "${activeItem.name}" no servidor...`)
+      try {
+        const found = await searchTitleInCatalog(service, activeItem.type, { title: activeItem.name })
+        if (found) {
+          activeItem = found
+        } else if (item.key.startsWith('tmdb:')) {
+          setError(`"${item.name}" não foi encontrado no seu servidor IPTV.`)
+          setOpeningMediaTitle(null)
+          return
+        }
+      } catch (err) {
+        console.warn('Erro ao resolver item no catálogo:', err)
+      }
+    }
+
+    if (activeItem.type === 'live') {
       setPlaylist(opts.playlist ?? [])
-      upsertHistory({ ...item, position: 0, duration: 0, updatedAt: Date.now() })
-      setCurrent({ item, url: service.liveUrl(item.id, 'm3u8'), title: item.name, isLive: true, startAt: 0 })
+      upsertHistory({ ...activeItem, position: 0, duration: 0, updatedAt: Date.now() })
+      setCurrent({ item: activeItem, url: service.liveUrl(activeItem.id, 'm3u8'), title: activeItem.name, isLive: true, startAt: 0 })
       setOpeningMediaTitle(null)
       return
     }
-    if (item.type === 'movies') {
-      setCurrent({ item, url: service.vodUrl(item.id, item.ext), title: item.name, isLive: false, startAt })
+    if (activeItem.type === 'movies') {
+      setCurrent({ item: activeItem, url: service.vodUrl(activeItem.id, activeItem.ext || 'mp4'), title: activeItem.name, isLive: false, startAt })
       setOpeningMediaTitle(null)
       return
     }
     try {
-      const info = await service.getSeriesInfo(item.id)
+      let info = await service.getSeriesInfo(activeItem.id)
+
+      // Fallback: se info de episódios veio vazia, tenta buscar pelo nome para recuperar o stream_id correto
+      if (!info?.episodes || Object.keys(info.episodes).length === 0) {
+        const foundSeries = await searchTitleInCatalog(service, 'series', { title: activeItem.name })
+        if (foundSeries && foundSeries.id !== activeItem.id) {
+          activeItem = foundSeries
+          info = await service.getSeriesInfo(foundSeries.id)
+        }
+      }
 
       // 1. Ordena temporadas numericamente (Temporada 1, 2, 3...)
-      const seasonKeys = Object.keys(info.episodes || {}).sort((a, b) => {
+      const seasonKeys = Object.keys(info?.episodes || {}).sort((a, b) => {
         const numA = parseInt(a.replace(/\D/g, ''), 10) || 0
         const numB = parseInt(b.replace(/\D/g, ''), 10) || 0
         return numA - numB
@@ -169,12 +203,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       const episodeStartAt = isResumable ? saved.position : 0
 
       setCurrent({
-        item,
+        item: activeItem,
         episode: { id: episode.id, ext: episode.ext, title: episode.title },
         startAt: episodeStartAt,
         allEpisodes: allEpisodes.map((e) => ({ id: e.id, ext: e.ext, title: e.title })),
         url: service.episodeUrl(episode.id, episode.ext),
-        title: `${item.name} - ${episode.title}`,
+        title: `${activeItem.name} - ${episode.title}`,
         isLive: false,
       })
     } catch (e) {
