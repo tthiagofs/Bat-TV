@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bat-tv-pwa-v4'
+const CACHE_NAME = 'bat-tv-pwa-v5'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -21,6 +21,13 @@ self.addEventListener('install', (event) => {
 
 // Ativação e limpeza de caches antigos
 self.addEventListener('activate', (event) => {
+  const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+
+  if (isApple) {
+    self.registration.unregister().catch(() => {})
+  }
+
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
@@ -36,6 +43,14 @@ self.addEventListener('activate', (event) => {
 
 // Interceptação de requisições
 self.addEventListener('fetch', (event) => {
+  // Dispositivos Apple (iOS / iPadOS): NUNCA intercepta qualquer requisição!
+  // Permite streaming e conexões 100% nativas com mediaserverd do iOS sem deadlocks
+  const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  if (isApple) {
+    return
+  }
+
   const url = new URL(event.request.url)
 
   // 1. Atende requisições de vídeos offline baixados (/offline-media/...) com suporte a Range (iOS Safari)

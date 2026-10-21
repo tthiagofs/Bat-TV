@@ -1400,7 +1400,6 @@ export default function Player({
           autoPlay
           playsInline
           muted={muted}
-          crossOrigin="anonymous"
           preload="auto"
           {...{
             'webkit-playsinline': 'true',
