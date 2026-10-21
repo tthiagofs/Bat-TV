@@ -374,6 +374,14 @@ export default function Downloads({ onNavigate }: Props) {
         </section>
       )}
 
+      {/* Indicador de carregamento enquanto busca os dados no aparelho */}
+      {loading && downloads.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-center space-y-3">
+          <Loader2 size={32} className="animate-spin text-rose-500" />
+          <p className="text-xs text-zinc-400 font-medium">Buscando títulos salvos no aparelho...</p>
+        </div>
+      )}
+
       {/* Estado Vazio: Nenhum download cadastrado */}
       {downloads.length === 0 && !loading && (
         <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">

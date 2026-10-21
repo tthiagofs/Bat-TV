@@ -163,13 +163,13 @@ class DownloadManager {
     remoteUrl: string
     duration?: number
   }): Promise<{ success: boolean; error?: string }> {
-    // 1. Checagem de segurança de espaço: mínimo de 1.5 GB livre
+    // 1. Checagem de segurança de espaço: mínimo de 100 MB livre para permitir downloads em navegadores móveis
     const space = await this.getStorageInfo()
-    const MIN_REQUIRED_BYTES = 1.5 * 1024 * 1024 * 1024
-    if (space.freeBytes < MIN_REQUIRED_BYTES) {
+    const MIN_REQUIRED_BYTES = 100 * 1024 * 1024
+    if (space.freeBytes > 0 && space.freeBytes < MIN_REQUIRED_BYTES) {
       return {
         success: false,
-        error: 'Espaço em disco insuficiente. Seu aparelho precisa de pelo menos 1.5 GB livres para baixar com segurança.',
+        error: 'Espaço em disco muito baixo no navegador. Libere espaço antes de baixar.',
       }
     }
 
@@ -222,6 +222,10 @@ class DownloadManager {
 
   public async processQueue() {
     if (this.isProcessing) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      // Dispositivo sem internet: não tenta baixar da rede para não gerar erro
+      return
+    }
     const list = await getAllDownloads()
     const queued = list.find((i) => i.status === 'queued') || list.find((i) => i.status === 'downloading')
     if (!queued) return
@@ -563,11 +567,17 @@ class DownloadManager {
   }
 
   public async getPlayableUrl(item: DownloadedMedia): Promise<string> {
-    // 1. Se for mídia salva no IndexedDB (Web / PWA)
+    // 1. Se for mídia salva no Cache Storage ou IndexedDB (Web / PWA)
     if (item.playUrl?.startsWith('blob-store://') || item.localPath?.startsWith('indexeddb://')) {
       if (this.activeBlobUrls.has(item.id)) {
         return this.activeBlobUrls.get(item.id)!
       }
+
+      // Se temos o Service Worker ativo na PWA, `/offline-media/...` permite seek e reprodução perfeita no iOS Safari
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        return `/offline-media/${item.id}.mp4`
+      }
+
       const blob = await getMediaBlob(item.id)
       if (blob) {
         const blobUrl = URL.createObjectURL(blob)
