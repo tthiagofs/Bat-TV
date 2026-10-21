@@ -54,7 +54,16 @@ self.addEventListener('fetch', (event) => {
 
         // Suporte a HTTP 206 Partial Content para iOS Safari conseguir dar seek e reproduzir offline
         try {
-          const blob = await cachedRes.blob()
+          // Mantém blob em memória cache para não reler do disco a cada chunk solicitado
+          if (!self._videoBlobCache) self._videoBlobCache = new Map()
+          let blob = self._videoBlobCache.get(event.request.url)
+          if (!blob) {
+            blob = await cachedRes.blob()
+            self._videoBlobCache.set(event.request.url, blob)
+            // Limpa após 30 minutos
+            setTimeout(() => self._videoBlobCache.delete(event.request.url), 30 * 60 * 1000)
+          }
+
           const totalSize = blob.size
           const parts = rangeHeader.replace(/bytes=/, '').split('-')
           const start = parseInt(parts[0], 10) || 0

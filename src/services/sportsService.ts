@@ -146,6 +146,9 @@ export const CLUB_ESPN_MAP: Record<string, { id: string; league: string }> = {
 export const TEAM_STRICT_CHANNELS: Record<string, string[]> = {
   cruzeiro: ['SporTV', 'Premiere'],
   'atletico-mg': ['SporTV', 'Premiere'],
+  vasco: ['SBT', 'Paramount+', 'Premiere', 'SporTV', 'Globo'],
+  corinthians: ['SBT', 'Paramount+', 'Premiere', 'SporTV'],
+  flamengo: ['Premiere', 'SporTV', 'Globo', 'Paramount+'],
 }
 
 type Json = Record<string, any>
@@ -390,9 +393,24 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
   const leagueBadge = leagueConfig ? leagueConfig.badge : (comp.league?.logos?.[0]?.href || '')
 
   let channels = leagueConfig ? [...leagueConfig.tv] : ['SporTV', 'ESPN', 'Premiere']
-  const isCruzeiro = homeName.toLowerCase().includes('cruzeiro') || awayName.toLowerCase().includes('cruzeiro')
+  const homeLower = homeName.toLowerCase()
+  const awayLower = awayName.toLowerCase()
+  const isCruzeiro = homeLower.includes('cruzeiro') || awayLower.includes('cruzeiro')
+  const isVasco = homeLower.includes('vasco') || awayLower.includes('vasco')
+
   if (isCruzeiro) {
     channels = ['SporTV', 'Premiere']
+  } else if (leagueSlug === 'conmebol.sudamericana') {
+    // Na Copa Sul-Americana no Brasil, os jogos principais de TV aberta/streaming pertencem a SBT e Paramount+
+    if (isVasco || homeLower.includes('corinthians') || awayLower.includes('corinthians') || homeLower.includes('fortaleza') || awayLower.includes('fortaleza') || homeLower.includes('cruzeiro') || awayLower.includes('cruzeiro')) {
+      channels = ['SBT', 'Paramount+', 'ESPN']
+    } else {
+      channels = ['Paramount+', 'ESPN', 'SBT']
+    }
+  } else if (leagueSlug === 'conmebol.libertadores') {
+    channels = ['Globo', 'Paramount+', 'ESPN']
+  } else if (leagueSlug === 'bra.copa_do_brazil') {
+    channels = ['SporTV', 'Premiere', 'Prime Video', 'Globo']
   }
 
   const ts = event.date ? Date.parse(event.date) : Date.now()

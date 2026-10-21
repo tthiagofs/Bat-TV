@@ -122,8 +122,8 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
 
     try {
       const liveList = await getItems(service, 'live', 'all')
-      const targetChannel = channel || match.channels?.[0] || 'SporTV'
-      const found = findBestLiveChannel(liveList, targetChannel)
+      const targets = match.channels && match.channels.length > 0 ? match.channels : [channel, 'SporTV']
+      const found = findBestLiveChannel(liveList, targets)
       if (found) {
         play(found, { playlist: liveList })
       }

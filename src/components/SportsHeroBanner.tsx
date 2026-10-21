@@ -101,8 +101,8 @@ function SportsHeroBannerBase({ matches }: Props) {
     if (!service) return
     try {
       const liveList = await getItems(service, 'live', 'all')
-      const target = channel || current.channels?.[0] || 'SporTV'
-      const found = findBestLiveChannel(liveList, target)
+      const targets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
+      const found = findBestLiveChannel(liveList, targets)
       if (found) play(found, { playlist: liveList })
     } catch {
       // ignore

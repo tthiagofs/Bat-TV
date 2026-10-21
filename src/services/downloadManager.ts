@@ -573,16 +573,17 @@ class DownloadManager {
         return this.activeBlobUrls.get(item.id)!
       }
 
-      // Se temos o Service Worker ativo na PWA, `/offline-media/...` permite seek e reprodução perfeita no iOS Safari
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        return `/offline-media/${item.id}.mp4`
-      }
-
+      // Cria URL direta de Blob instantânea na memória (carrega em < 50ms)
       const blob = await getMediaBlob(item.id)
       if (blob) {
         const blobUrl = URL.createObjectURL(blob)
         this.activeBlobUrls.set(item.id, blobUrl)
         return blobUrl
+      }
+
+      // Se não encontrou no Blob local mas tem Service Worker registrado
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        return `/offline-media/${item.id}.mp4`
       }
     }
 
