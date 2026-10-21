@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bat-tv-pwa-v2'
+const CACHE_NAME = 'bat-tv-pwa-v3'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -91,6 +91,9 @@ self.addEventListener('fetch', (event) => {
   // 2. Não intercepta streams de vídeo, proxies ou APIs externas (permite streaming HTTP nativo)
   if (event.request.method !== 'GET') return
   if (
+    event.request.destination === 'video' ||
+    event.request.destination === 'audio' ||
+    event.request.headers.has('range') ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/iptv-proxy') ||
     url.searchParams.has('url') ||

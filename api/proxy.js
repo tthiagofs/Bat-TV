@@ -43,31 +43,50 @@ export default function handler(req, res) {
       const headers = {
         'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
         Accept: '*/*',
+        'Accept-Encoding': 'identity',
       }
 
       if (req.headers.range) {
         headers['Range'] = req.headers.range
       }
 
-      const proxyReq = client.get(
+      const clientMethod = req.method === 'HEAD' ? 'HEAD' : 'GET'
+      const proxyReq = client.request(
         targetUrl,
-        { headers, agent },
+        { method: clientMethod, headers, agent },
         (proxyRes) => {
           if (
             [301, 302, 307, 308].includes(proxyRes.statusCode || 0) &&
             proxyRes.headers.location
           ) {
+            proxyRes.resume()
             const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString()
             return fetchWithRedirects(redirectUrl, maxRedirects - 1)
           }
 
           res.statusCode = proxyRes.statusCode || 200
           res.setHeader('Access-Control-Allow-Origin', '*')
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
           res.setHeader('Access-Control-Allow-Headers', '*')
           res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
           res.setHeader('Accept-Ranges', 'bytes')
 
-          const contentType = proxyRes.headers['content-type'] || 'application/octet-stream'
+          let contentType = proxyRes.headers['content-type'] || ''
+          // Se o servidor Xtream retornar application/octet-stream ou genérico, detecta o MIME type real pelo formato
+          if (!contentType || contentType === 'application/octet-stream' || contentType === 'binary/octet-stream' || contentType.startsWith('text/plain')) {
+            const lower = targetUrl.toLowerCase()
+            if (lower.includes('.m3u8') || lower.includes('m3u8')) {
+              contentType = 'application/vnd.apple.mpegurl'
+            } else if (lower.includes('.mp4') || lower.includes('/movie/') || lower.includes('/series/')) {
+              contentType = 'video/mp4'
+            } else if (lower.includes('.ts') || lower.includes('/live/')) {
+              contentType = 'video/mp2t'
+            } else if (lower.includes('.mkv')) {
+              contentType = 'video/mp4'
+            } else {
+              contentType = 'video/mp4'
+            }
+          }
           res.setHeader('Content-Type', contentType)
 
           if (proxyRes.headers['content-range']) {
@@ -75,6 +94,11 @@ export default function handler(req, res) {
           }
           if (proxyRes.headers['content-length']) {
             res.setHeader('Content-Length', proxyRes.headers['content-length'])
+          }
+
+          if (req.method === 'HEAD') {
+            proxyRes.resume()
+            return res.end()
           }
 
           // Se for manifesto HLS (.m3u8), reescreve chaves AES-128 e segmentos .ts
@@ -131,6 +155,8 @@ export default function handler(req, res) {
           proxyRes.pipe(res)
         }
       )
+
+      proxyReq.end()
 
       req.on('close', () => {
         if (!res.writableEnded) {

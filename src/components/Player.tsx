@@ -162,16 +162,36 @@ export default function Player({
   const [activeUrl, setActiveUrl] = useState(url)
   const [streamAttempt, setStreamAttempt] = useState<'m3u8' | 'ts'>('m3u8')
   const [hasAutoTriedExt, setHasAutoTriedExt] = useState(false)
+  const [needsUserGesture, setNeedsUserGesture] = useState(false)
+  const [needsUnmute, setNeedsUnmute] = useState(false)
 
   useEffect(() => {
     setActiveUrl(url)
     setStreamAttempt('m3u8')
     setHasAutoTriedExt(false)
+    setNeedsUserGesture(false)
+    setNeedsUnmute(false)
   }, [url])
+
+  // Watchdog contra buffering infinito no mobile (se o vídeo estiver pausado pelo navegador)
+  useEffect(() => {
+    if (!buffering || error || isNative) return
+    const watchdogTimer = setTimeout(() => {
+      const v = videoRef.current
+      if (v && v.paused && !playing) {
+        console.warn('Buffering watchdog disparado: vídeo em pausa no navegador mobile.')
+        setBuffering(false)
+        setNeedsUserGesture(true)
+      }
+    }, 9000)
+    return () => clearTimeout(watchdogTimer)
+  }, [buffering, error, isNative, playing])
 
   const toggleVodFormat = useCallback(() => {
     setError('')
     setBuffering(true)
+    setNeedsUserGesture(false)
+    setNeedsUnmute(false)
     setActiveUrl((prev) => {
       if (prev.endsWith('.mp4')) return prev.replace(/\.mp4$/, '.mkv')
       if (prev.endsWith('.mkv')) return prev.replace(/\.mkv$/, '.mp4')
@@ -253,6 +273,23 @@ export default function Player({
     if (e) {
       e.stopPropagation()
     }
+
+    // Se estava mudo pelo autoplay do mobile, ativa o som no primeiro toque
+    if (needsUnmute && videoRef.current) {
+      videoRef.current.muted = false
+      setMuted(false)
+      setNeedsUnmute(false)
+    }
+
+    // Se estava aguardando toque para iniciar, toca imediatamente
+    if (needsUserGesture && videoRef.current) {
+      videoRef.current.play().then(() => {
+        setNeedsUserGesture(false)
+        setPlaying(true)
+        setBuffering(false)
+      }).catch(() => {})
+    }
+
     window.clearTimeout(hideTimer.current)
     setShowControls((prev) => {
       const next = !prev
@@ -263,7 +300,7 @@ export default function Player({
       }
       return next
     })
-  }, [showQuickZap, showQualityMenu, showAudioSubMenu])
+  }, [showQuickZap, showQualityMenu, showAudioSubMenu, needsUnmute, needsUserGesture])
 
   const [time, setTime] = useState({ current: 0, duration: 0 })
   const [epg, setEpg] = useState<EpgEntry[]>([])
@@ -470,6 +507,8 @@ export default function Player({
     if (!video) return
     setError('')
     setBuffering(true)
+    setNeedsUserGesture(false)
+    setNeedsUnmute(false)
     let hls: Hls | null = null
     let networkRetryCount = 0
 
@@ -490,6 +529,45 @@ export default function Player({
       streamUrl = buildProxyUrl(streamUrl)
     }
 
+    const tryStartPlayback = (v: HTMLVideoElement) => {
+      const playPromise = v.play()
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setBuffering(false)
+            setPlaying(true)
+            setNeedsUserGesture(false)
+            setNeedsUnmute(false)
+          })
+          .catch((err) => {
+            console.warn('Autoplay com som recusado pelo navegador mobile:', err)
+            // Tenta imediatamente muted autoplay (permitido por padrão no Chrome Mobile e Safari iOS)
+            v.muted = true
+            setMuted(true)
+            const mutedPromise = v.play()
+            if (mutedPromise !== undefined) {
+              mutedPromise
+                .then(() => {
+                  setBuffering(false)
+                  setPlaying(true)
+                  setNeedsUserGesture(false)
+                  setNeedsUnmute(true)
+                })
+                .catch((err2) => {
+                  console.warn('Autoplay mudo também bloqueado pelo navegador:', err2)
+                  setBuffering(false)
+                  setPlaying(false)
+                  setNeedsUserGesture(true)
+                })
+            } else {
+              setBuffering(false)
+              setPlaying(false)
+              setNeedsUserGesture(true)
+            }
+          })
+      }
+    }
+
     const isHls = (rawUrl.includes('.m3u8') || (isLive && streamAttempt === 'm3u8')) && Hls.isSupported()
 
     if (isHls) {
@@ -498,7 +576,7 @@ export default function Player({
       hls.loadSource(streamUrl)
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
-        video.play().catch(() => {})
+        tryStartPlayback(video)
         if (data.levels && data.levels.length > 1) {
           const lvls = data.levels.map((l, i) => ({
             id: i,
@@ -544,11 +622,7 @@ export default function Player({
             if (video) {
               video.src = streamUrl
               video.load()
-              video.play().catch((err) => {
-                console.warn('Fallback tag video falhou:', err)
-                setBuffering(false)
-                setError('Falha de conexão com o servidor de transmissão.')
-              })
+              tryStartPlayback(video)
             }
           }
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -560,10 +634,7 @@ export default function Player({
           if (video) {
             video.src = streamUrl
             video.load()
-            video.play().catch(() => {
-              setBuffering(false)
-              setError('Não foi possível reproduzir este stream.')
-            })
+            tryStartPlayback(video)
           }
         }
       })
@@ -571,12 +642,7 @@ export default function Player({
       video.src = streamUrl
       video.preload = 'auto'
       video.load()
-      const playPromise = video.play()
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn('Erro ao reproduzir via tag video:', err)
-        })
-      }
+      tryStartPlayback(video)
     }
     return () => {
       hls?.destroy()
@@ -1321,16 +1387,29 @@ export default function Player({
       {!isNative && (
         <video
           ref={videoRef}
+          autoPlay
           playsInline
-          {...{ 'webkit-playsinline': 'true' }}
-          onPlay={() => setPlaying(true)}
+          {...{
+            'webkit-playsinline': 'true',
+            'x5-playsinline': 'true',
+            'x5-video-player-type': 'h5-page',
+          }}
+          onPlay={() => {
+            setPlaying(true)
+            setNeedsUserGesture(false)
+          }}
           onPause={() => setPlaying(false)}
           onWaiting={() => setBuffering(true)}
-          onPlaying={() => setBuffering(false)}
+          onPlaying={() => {
+            setBuffering(false)
+            setPlaying(true)
+            setNeedsUserGesture(false)
+          }}
           onCanPlay={() => setBuffering(false)}
+          onLoadedData={() => setBuffering(false)}
           onError={(e) => {
-            if (isLive && streamAttempt === 'm3u8' && (Capacitor.isNativePlatform() || isElectronEnv)) {
-              console.warn('Tag video falhou com m3u8, tentando TS no player nativo...')
+            if (isLive && streamAttempt === 'm3u8') {
+              console.warn('Tag video falhou com m3u8, tentando TS...')
               setStreamAttempt('ts')
               return
             }
@@ -1389,7 +1468,67 @@ export default function Player({
         className="absolute inset-0 z-10 cursor-pointer touch-manipulation"
       />
 
-      {buffering && !error && (
+      {/* Botão flutuante para desmutar quando autoplay iniciar mudo no celular */}
+      {needsUnmute && !error && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 fade-up pointer-events-auto">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (videoRef.current) {
+                videoRef.current.muted = false
+                setMuted(false)
+              }
+              setNeedsUnmute(false)
+            }}
+            className="flex items-center gap-2.5 px-5 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs sm:text-sm shadow-2xl backdrop-blur-md animate-bounce cursor-pointer touch-manipulation border border-white/20 active:scale-95 transition"
+          >
+            <VolumeX size={18} />
+            <span>Toque para ativar o som</span>
+          </button>
+        </div>
+      )}
+
+      {/* Botão central quando o navegador móvel exigir interação explícita do usuário */}
+      {needsUserGesture && !playing && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-black/60 backdrop-blur-xs p-6 text-center space-y-4 fade-up">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setNeedsUserGesture(false)
+              setBuffering(true)
+              const v = videoRef.current
+              if (v) {
+                v.muted = false
+                setMuted(false)
+                v.play()
+                  .then(() => {
+                    setBuffering(false)
+                    setPlaying(true)
+                  })
+                  .catch(() => {
+                    v.muted = true
+                    setMuted(true)
+                    v.play().catch(() => {})
+                    setNeedsUnmute(true)
+                    setBuffering(false)
+                    setPlaying(true)
+                  })
+              }
+            }}
+            className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black text-base sm:text-lg shadow-2xl transition cursor-pointer touch-manipulation border border-white/20"
+          >
+            <Play size={26} className="fill-white" />
+            <span>Toque para Assistir</span>
+          </button>
+          <p className="text-xs sm:text-sm text-zinc-300 max-w-xs">
+            O navegador do seu celular exige um toque para iniciar a reprodução com som.
+          </p>
+        </div>
+      )}
+
+      {buffering && !error && !needsUserGesture && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
           <Loader2 size={48} className="animate-spin text-white/80" />
         </div>
