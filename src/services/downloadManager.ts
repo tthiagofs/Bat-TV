@@ -7,11 +7,14 @@ import {
   updateDownloadProgress,
   markDownloadCompleted,
   markDownloadError,
+  markDownloadPaused,
   deleteDownloadRecord,
   saveMediaBlob,
   getMediaBlob,
+  deleteMediaBlob,
   type DownloadedMedia,
 } from './downloadDb'
+import { backgroundKeepAlive } from './backgroundKeepAlive'
 
 declare global {
   interface Window {
@@ -48,7 +51,18 @@ class DownloadManager {
   constructor() {
     this.setupListeners()
     // Retoma fila ao iniciar
-    setTimeout(() => this.processQueue(), 2000)
+    setTimeout(() => this.processQueue(), 1500)
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        this.processQueue()
+      })
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.processQueue()
+        }
+      })
+    }
   }
 
   private setupListeners() {
@@ -195,10 +209,21 @@ class DownloadManager {
     return { success: true }
   }
 
-  private async processQueue() {
+  public async resumeDownload(id: string): Promise<void> {
+    const item = await getDownload(id)
+    if (!item) return
+    if (item.status === 'completed') return
+    item.status = 'queued'
+    item.error = undefined
+    await upsertDownload(item)
+    this.notify()
+    this.processQueue()
+  }
+
+  public async processQueue() {
     if (this.isProcessing) return
     const list = await getAllDownloads()
-    const queued = list.find((i) => i.status === 'queued')
+    const queued = list.find((i) => i.status === 'queued') || list.find((i) => i.status === 'downloading')
     if (!queued) return
 
     this.isProcessing = true
@@ -289,7 +314,9 @@ class DownloadManager {
 
     // Plataforma 3: Web Browser (Safari iOS / Chrome / PWA / Vercel)
     try {
-      await upsertDownload({ ...item, status: 'downloading', progress: 0, downloadedBytes: 0 })
+      await backgroundKeepAlive.acquire()
+
+      await upsertDownload({ ...item, status: 'downloading' })
       this.notify()
 
       const abortController = new AbortController()
@@ -332,12 +359,22 @@ class DownloadManager {
       const chunks: BlobPart[] = []
       let receivedBytes = 0
 
+      // Verifica se há chunks parciais salvos anteriormente para retomar sem reiniciar do zero
+      const partialBlob = await getMediaBlob(`partial_${item.id}`)
+      if (partialBlob && partialBlob.size > 0) {
+        const pBuffer = await partialBlob.arrayBuffer()
+        chunks.push(pBuffer)
+        receivedBytes = pBuffer.byteLength
+      }
+
       // Se o servidor suporta Range e temos o tamanho total, baixa em fatias seguras de 4MB
       // Isso evita timeout no Vercel Serverless Function e permite download resiliente
       const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB
 
       if (supportsRange && totalBytes > 0) {
-        let start = 0
+        let start = receivedBytes
+        let lastPartialSave = Date.now()
+
         while (start < totalBytes) {
           if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
 
@@ -365,18 +402,34 @@ class DownloadManager {
             } catch (err: any) {
               if (err.name === 'AbortError') throw err
               lastErr = err
-              await new Promise((r) => setTimeout(r, 800))
+              await new Promise((r) => setTimeout(r, 1000))
             }
           }
 
           if (!chunkSuccess) {
-            throw lastErr || new Error(`Falha ao descarregar bloco ${start}-${end}`)
+            // Salva o progresso parcial no IndexedDB para não perder nada do que já foi baixado
+            const currentPartial = new Blob(chunks)
+            await saveMediaBlob(`partial_${item.id}`, currentPartial).catch(() => {})
+            await markDownloadPaused(item.id, 'Download pausado (sem conexão)')
+            backgroundKeepAlive.release()
+            this.webAbortControllers.delete(item.id)
+            this.isProcessing = false
+            this.notify()
+            return
           }
 
           start = end + 1
           const percent = Math.min(99, Math.round((receivedBytes / totalBytes) * 100))
           await updateDownloadProgress(item.id, percent, receivedBytes, totalBytes)
           this.notify()
+
+          // Salva backup parcial a cada 20 segundos para resiliência máxima
+          const now = Date.now()
+          if (now - lastPartialSave > 20000) {
+            lastPartialSave = now
+            const currentPartial = new Blob(chunks)
+            await saveMediaBlob(`partial_${item.id}`, currentPartial).catch(() => {})
+          }
         }
       } else {
         // Fallback: Streaming contínuo via ReadableStream caso o servidor não suporte Range
@@ -419,22 +472,30 @@ class DownloadManager {
 
       // Grava no IndexedDB local do dispositivo
       await saveMediaBlob(item.id, blob)
+      await deleteMediaBlob(`partial_${item.id}`).catch(() => {})
 
       const localPath = `indexeddb://${item.id}`
       const playUrl = `blob-store://${item.id}`
 
       await markDownloadCompleted(item.id, localPath, playUrl, finalSize)
+      backgroundKeepAlive.release()
       this.webAbortControllers.delete(item.id)
       this.isProcessing = false
       this.notify()
       this.processQueue()
     } catch (err: any) {
+      backgroundKeepAlive.release()
       this.webAbortControllers.delete(item.id)
       if (err.name === 'AbortError') {
         console.log('Download cancelado:', item.id)
       } else {
         console.error('Erro no download web:', err)
-        await markDownloadError(item.id, err?.message || 'Falha ao baixar mídia')
+        const currentItem = await getDownload(item.id)
+        if (currentItem && currentItem.downloadedBytes > 0) {
+          await markDownloadPaused(item.id, 'Download pausado')
+        } else {
+          await markDownloadError(item.id, err?.message || 'Falha ao baixar mídia')
+        }
       }
       this.isProcessing = false
       this.notify()
@@ -443,6 +504,8 @@ class DownloadManager {
   }
 
   public async cancelDownload(id: string): Promise<void> {
+    backgroundKeepAlive.release()
+    await deleteMediaBlob(`partial_${id}`).catch(() => {})
     const controller = this.webAbortControllers.get(id)
     if (controller) {
       try {
@@ -463,6 +526,8 @@ class DownloadManager {
   }
 
   public async deleteDownload(id: string): Promise<void> {
+    backgroundKeepAlive.release()
+    await deleteMediaBlob(`partial_${id}`).catch(() => {})
     const controller = this.webAbortControllers.get(id)
     if (controller) {
       try {

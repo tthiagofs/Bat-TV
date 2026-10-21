@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   ChevronRight,
   Layers,
+  RotateCcw,
 } from 'lucide-react'
 import { useDownloads } from '../hooks/useDownloads'
 import { usePlayback } from '../context/PlaybackContext'
@@ -43,7 +44,7 @@ function formatDuration(sec: number): string {
 }
 
 export default function Downloads({ onNavigate }: Props) {
-  const { downloads, storage, loading, cancel, remove } = useDownloads()
+  const { downloads, storage, loading, cancel, resume, remove } = useDownloads()
   const { playLocalMedia } = usePlayback()
 
   const [selectedSeriesName, setSelectedSeriesName] = useState<string | null>(null)
@@ -54,6 +55,10 @@ export default function Downloads({ onNavigate }: Props) {
 
   const activeDownloads = useMemo(() => {
     return downloads.filter((d) => d.status === 'downloading' || d.status === 'queued')
+  }, [downloads])
+
+  const pausedDownloads = useMemo(() => {
+    return downloads.filter((d) => d.status === 'paused' || d.status === 'error')
   }, [downloads])
 
   const completedDownloads = useMemo(() => {
@@ -294,8 +299,83 @@ export default function Downloads({ onNavigate }: Props) {
         </section>
       )}
 
-      {/* Estado Vazio: Nenhum download concluído */}
-      {completedDownloads.length === 0 && activeDownloads.length === 0 && !loading && (
+      {/* Downloads Pausados ou Interrompidos */}
+      {pausedDownloads.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+            <AlertCircle size={16} className="text-amber-500" />
+            <span>Downloads Pausados / Interrompidos ({pausedDownloads.length})</span>
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pausedDownloads.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 bg-zinc-900/90 border border-amber-500/40 rounded-2xl p-3 relative overflow-hidden"
+              >
+                <div className="w-14 h-20 bg-zinc-800 rounded-xl overflow-hidden shrink-0 relative">
+                  {item.posterUrl ? (
+                    <img src={item.posterUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                      {item.mediaType === 'movie' ? <Film size={18} /> : <Tv size={18} />}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <p className="text-xs font-bold text-white truncate">{item.title}</p>
+                  {item.subtitle && (
+                    <p className="text-[11px] text-zinc-400 truncate">{item.subtitle}</p>
+                  )}
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                      <span className="font-bold text-amber-400">Pausado em {item.progress}%</span>
+                      <span>
+                        {item.totalBytes > 0
+                          ? `${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalBytes)}`
+                          : item.downloadedBytes > 0
+                          ? `${formatBytes(item.downloadedBytes)} baixados`
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        style={{ width: `${item.progress}%` }}
+                        className="h-full bg-amber-500 rounded-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      onClick={() => resume(item.id)}
+                      className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center gap-1 transition cursor-pointer shadow"
+                    >
+                      <RotateCcw size={12} />
+                      <span>Continuar</span>
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      onClick={() => remove(item.id)}
+                      className="px-2 py-1 rounded-lg text-zinc-400 hover:text-rose-400 text-xs transition cursor-pointer"
+                      title="Excluir da lista"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Estado Vazio: Nenhum download cadastrado */}
+      {downloads.length === 0 && !loading && (
         <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
           <div className="w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600">
             <Download size={36} />
@@ -411,6 +491,7 @@ export default function Downloads({ onNavigate }: Props) {
                         const isDownloading = ep.status === 'downloading'
                         const isQueued = ep.status === 'queued'
                         const isCompleted = ep.status === 'completed'
+                        const isPaused = ep.status === 'paused' || ep.status === 'error'
                         const isPlaying = playingId === ep.id
 
                         return (
@@ -425,6 +506,8 @@ export default function Downloads({ onNavigate }: Props) {
                                 ? 'border-rose-500/50 shadow-md shadow-rose-950/20'
                                 : isQueued
                                 ? 'border-amber-500/30'
+                                : isPaused
+                                ? 'border-amber-500/40 bg-amber-950/10'
                                 : 'border-white/5 hover:border-rose-500/40 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500'
                             }`}
                           >
@@ -447,6 +530,10 @@ export default function Downloads({ onNavigate }: Props) {
                                 <div className="w-9 h-9 rounded-full bg-rose-600/20 text-rose-400 flex items-center justify-center shrink-0">
                                   <Loader2 size={16} className="animate-spin text-rose-500" />
                                 </div>
+                              ) : isPaused ? (
+                                <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                                  <AlertCircle size={16} />
+                                </div>
                               ) : (
                                 <div className="w-9 h-9 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
                                   <Clock size={16} />
@@ -461,6 +548,11 @@ export default function Downloads({ onNavigate }: Props) {
                                   {isDownloading && (
                                     <span className="text-[10px] font-extrabold text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-800 shrink-0">
                                       {ep.progress}%
+                                    </span>
+                                  )}
+                                  {isPaused && (
+                                    <span className="text-[10px] font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-800 shrink-0">
+                                      {ep.progress > 0 ? `Pausado (${ep.progress}%)` : 'Interrompido'}
                                     </span>
                                   )}
                                   {isQueued && (
@@ -488,6 +580,25 @@ export default function Downloads({ onNavigate }: Props) {
                                         className="h-full bg-gradient-to-r from-rose-600 to-rose-400 transition-all duration-300 rounded-full"
                                       />
                                     </div>
+                                  </div>
+                                ) : isPaused ? (
+                                  <div className="space-y-1 pt-1.5 w-full max-w-md">
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                                      <span className="text-amber-400 font-medium">Download pausado / sem conexão</span>
+                                      <span>
+                                        {ep.downloadedBytes > 0
+                                          ? `${formatBytes(ep.downloadedBytes)} salvos`
+                                          : ''}
+                                      </span>
+                                    </div>
+                                    {ep.progress > 0 && (
+                                      <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                        <div
+                                          style={{ width: `${ep.progress}%` }}
+                                          className="h-full bg-amber-500/70 rounded-full"
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                 ) : isQueued ? (
                                   <p className="text-[10px] text-amber-400/80 pt-0.5">
@@ -522,6 +633,28 @@ export default function Downloads({ onNavigate }: Props) {
                                     title="Excluir episódio"
                                   >
                                     <Trash2 size={14} />
+                                  </button>
+                                </>
+                              ) : isPaused ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    tabIndex={0}
+                                    onClick={() => resume(ep.id)}
+                                    className="flex items-center gap-1 text-xs font-bold text-amber-400 hover:text-amber-300 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition cursor-pointer"
+                                    title="Continuar download"
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Continuar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    tabIndex={0}
+                                    onClick={() => remove(ep.id)}
+                                    className="text-zinc-600 hover:text-rose-400 p-1.5 rounded-lg hover:bg-white/5 transition cursor-pointer"
+                                    title="Cancelar download"
+                                  >
+                                    <X size={14} />
                                   </button>
                                 </>
                               ) : (

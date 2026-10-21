@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { downloadManager, type StorageInfo } from '../services/downloadManager'
-import type { DownloadedMedia } from '../services/downloadDb'
+import { getLocalBackup, type DownloadedMedia } from '../services/downloadDb'
 
 export function useDownloads() {
-  const [downloads, setDownloads] = useState<DownloadedMedia[]>([])
+  const [downloads, setDownloads] = useState<DownloadedMedia[]>(() => getLocalBackup())
   const [storage, setStorage] = useState<StorageInfo>({
     freeBytes: 0,
     totalBytes: 0,
     usedByAppBytes: 0,
   })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => getLocalBackup().length === 0)
 
   useEffect(() => {
     const unsub = downloadManager.subscribe((items) => {
@@ -65,6 +65,10 @@ export function useDownloads() {
     return downloadManager.cancelDownload(id)
   }, [])
 
+  const resume = useCallback(async (id: string) => {
+    return downloadManager.resumeDownload(id)
+  }, [])
+
   const remove = useCallback(async (id: string) => {
     return downloadManager.deleteDownload(id)
   }, [])
@@ -78,6 +82,7 @@ export function useDownloads() {
     isDownloading,
     startDownload,
     cancel,
+    resume,
     remove,
   }
 }

@@ -24,13 +24,32 @@ const DB_NAME = 'bat-tv-downloads-db'
 const DB_VERSION = 2
 const STORE_NAME = 'downloads'
 const BLOB_STORE_NAME = 'media_blobs'
+const BACKUP_STORAGE_KEY = 'bat-tv:downloads-backup'
 
 let dbPromise: Promise<IDBDatabase> | null = null
+
+export function getLocalBackup(): DownloadedMedia[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(BACKUP_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveLocalBackup(list: DownloadedMedia[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(list))
+  } catch {}
+}
 
 function getDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
   dbPromise = new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
+      dbPromise = null
       return reject(new Error('IndexedDB não suportado neste ambiente'))
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION)
@@ -45,48 +64,82 @@ function getDb(): Promise<IDBDatabase> {
         db.createObjectStore(BLOB_STORE_NAME, { keyPath: 'id' })
       }
     }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onsuccess = () => {
+      const db = req.result
+      db.onversionchange = () => {
+        db.close()
+        dbPromise = null
+      }
+      resolve(db)
+    }
+    req.onerror = () => {
+      dbPromise = null
+      reject(req.error)
+    }
+    req.onblocked = () => {
+      console.warn('IndexedDB bloqueado por outra aba')
+    }
   })
   return dbPromise
 }
 
 export async function getAllDownloads(): Promise<DownloadedMedia[]> {
+  const localBackup = getLocalBackup()
   try {
     const db = await getDb()
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
       const req = store.getAll()
       req.onsuccess = () => {
         const list = (req.result || []) as DownloadedMedia[]
-        list.sort((a, b) => (b.completedAt || b.createdAt) - (a.completedAt || a.createdAt))
-        resolve(list)
+        if (list.length > 0) {
+          saveLocalBackup(list)
+          list.sort((a, b) => (b.completedAt || b.createdAt) - (a.completedAt || a.createdAt))
+          resolve(list)
+        } else if (localBackup.length > 0) {
+          // Se o IndexedDB ainda não populou mas o localStorage tem o backup offline, restaura
+          localBackup.forEach((item) => upsertDownload(item).catch(() => {}))
+          resolve(localBackup)
+        } else {
+          resolve([])
+        }
       }
-      req.onerror = () => reject(req.error)
+      req.onerror = () => {
+        resolve(localBackup)
+      }
     })
   } catch (err) {
-    console.error('Erro ao ler downloads do IndexedDB:', err)
-    return []
+    console.error('Erro ao ler downloads do IndexedDB, usando backup offline:', err)
+    return localBackup
   }
 }
 
 export async function getDownload(id: string): Promise<DownloadedMedia | null> {
+  const localBackup = getLocalBackup()
+  const fromBackup = localBackup.find((b) => b.id === id) || null
   try {
     const db = await getDb()
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
       const req = store.get(id)
-      req.onsuccess = () => resolve((req.result as DownloadedMedia) || null)
-      req.onerror = () => reject(req.error)
+      req.onsuccess = () => resolve((req.result as DownloadedMedia) || fromBackup)
+      req.onerror = () => resolve(fromBackup)
     })
   } catch {
-    return null
+    return fromBackup
   }
 }
 
 export async function upsertDownload(item: DownloadedMedia): Promise<void> {
+  // Atualiza imediatamente o backup no localStorage para ser 100% síncrono e instantâneo
+  const backup = getLocalBackup()
+  const idx = backup.findIndex((b) => b.id === item.id)
+  if (idx >= 0) backup[idx] = item
+  else backup.push(item)
+  saveLocalBackup(backup)
+
   const db = await getDb()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -183,7 +236,20 @@ export async function deleteMediaBlob(id: string): Promise<void> {
   } catch {}
 }
 
+export async function markDownloadPaused(id: string, reason?: string): Promise<void> {
+  const item = await getDownload(id)
+  if (!item) return
+  item.status = 'paused'
+  if (reason) item.error = reason
+  await upsertDownload(item)
+}
+
 export async function deleteDownloadRecord(id: string): Promise<void> {
+  // Remove do backup do localStorage
+  const backup = getLocalBackup()
+  const filtered = backup.filter((b) => b.id !== id)
+  saveLocalBackup(filtered)
+
   await deleteMediaBlob(id).catch(() => {})
   const db = await getDb()
   return new Promise((resolve, reject) => {
