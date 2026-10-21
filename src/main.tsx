@@ -9,9 +9,24 @@ if (localStorage.getItem('iptv-rea:lite') !== '0') document.documentElement.clas
 // Registro do Service Worker para PWA e funcionamento offline no iPhone, Android e PC
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('ServiceWorker registration error:', err)
-    })
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => {
+        // Força verificação imediata de atualizações no servidor (vital para PWAs instaladas no iPhone)
+        reg.update().catch(() => {})
+      })
+      .catch((err) => {
+        console.warn('ServiceWorker registration error:', err)
+      })
+  })
+
+  // Recarrega automaticamente quando o Service Worker for atualizado (evita PWA travada em cache antigo)
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true
+      window.location.reload()
+    }
   })
 }
 

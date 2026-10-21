@@ -330,10 +330,10 @@ export default function Player({
     }, 5000)
   }, [])
 
-  // Exibe o botão de pular abertura apenas quando o episódio realmente começa a tocar nos primeiros 60 segundos
+  // Exibe o botão de pular abertura apenas quando o episódio realmente já carregou e começou a tocar nos primeiros 60 segundos
   useEffect(() => {
-    if (!isSeries || !playing || hasShownSkipIntroRef.current) return
-    if (time.current < 60) {
+    if (!isSeries || buffering || !playing || error || hasShownSkipIntroRef.current) return
+    if (time.current >= 0.5 && time.current < 60) {
       hasShownSkipIntroRef.current = true
       startFloatingSkipTimer()
       const timer = setTimeout(() => {
@@ -341,7 +341,7 @@ export default function Player({
       }, 300)
       return () => clearTimeout(timer)
     }
-  }, [isSeries, playing, time.current, startFloatingSkipTimer])
+  }, [isSeries, buffering, playing, error, time.current, startFloatingSkipTimer])
 
 
 
@@ -1399,6 +1399,9 @@ export default function Player({
           ref={videoRef}
           autoPlay
           playsInline
+          muted={muted}
+          crossOrigin="anonymous"
+          preload="auto"
           {...{
             'webkit-playsinline': 'true',
             'x5-playsinline': 'true',
