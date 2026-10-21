@@ -1,12 +1,55 @@
 /**
  * CLOUDFLARE WORKER PROXY PARA O BAT TV (IPTV)
  * 
- * Este script roda gratuitamente nos servidores da Cloudflare:
- * - 100.000 requisições grátis por dia
- * - Largura de banda ILIMITADA (não gasta 1 centavo da Vercel)
+ * - 100.000 requisições diárias gratuitas
+ * - Banda ilimitada (não gasta limite da Vercel)
  * - Suporte a Range (HTTP 206) para seek no player e downloads offline
  * - Reescreve manifestos HLS (.m3u8) para canais ao vivo e filmes
+ * - Resolve redirecionamentos com Load Balancers de IPTV que usam IP direto (evita erro 1003)
  */
+
+function normalizeUrlForCloudflare(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    // Se o host for um IP numérico direto (ex: 79.127.148.162), converte para hostname compatível (nip.io)
+    // Isso evita o bloqueio de segurança "error code: 1003 (Direct IP Access Not Allowed)" da Cloudflare
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(u.hostname)) {
+      u.hostname = u.hostname + '.nip.io'
+      return u.toString()
+    }
+  } catch {}
+  return rawUrl
+}
+
+async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
+  let curUrl = normalizeUrlForCloudflare(initialUrl)
+  let redirects = 0
+  const maxRedirects = 8
+
+  while (redirects < maxRedirects) {
+    const res = await fetch(curUrl, {
+      method: requestMethod,
+      headers: headers,
+      redirect: 'manual',
+    })
+
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      const loc = res.headers.get('location')
+      if (loc) {
+        const nextUrl = new URL(loc, curUrl).toString()
+        curUrl = normalizeUrlForCloudflare(nextUrl)
+        redirects++
+        continue
+      }
+    }
+
+    return { response: res, finalUrl: curUrl }
+  }
+
+  // Se exceder, tenta seguir direto
+  const res = await fetch(curUrl, { method: requestMethod, headers, redirect: 'follow' })
+  return { response: res, finalUrl: curUrl }
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -48,16 +91,14 @@ export default {
         fetchHeaders.set('Range', range)
       }
 
-      // 3. Executa a requisição até o servidor IPTV (com suporte a redirecionamentos)
-      const originResponse = await fetch(targetUrl, {
-        method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-        headers: fetchHeaders,
-        redirect: 'follow',
-      })
+      // 3. Executa a requisição até o servidor IPTV resolvendo redirecionamentos para IPs
+      const reqMethod = request.method === 'HEAD' ? 'HEAD' : 'GET'
+      const { response: originResponse, finalUrl } = await fetchWithSmartRedirects(targetUrl, reqMethod, fetchHeaders)
 
       const contentType = originResponse.headers.get('content-type') || 'application/octet-stream'
       const isM3u8 =
         targetUrl.includes('.m3u8') ||
+        finalUrl.includes('.m3u8') ||
         contentType.includes('mpegurl') ||
         contentType.includes('x-mpegURL')
 
@@ -76,7 +117,7 @@ export default {
             if (trimmed.includes('URI=')) {
               return trimmed.replace(/URI=["']?([^"',>\s]+)["']?/g, (_, uri) => {
                 try {
-                  const absoluteUrl = new URL(uri, targetUrl).toString()
+                  const absoluteUrl = normalizeUrlForCloudflare(new URL(uri, finalUrl).toString())
                   return `URI="${workerOrigin}?url=${encodeURIComponent(absoluteUrl)}"`
                 } catch {
                   return `URI="${uri}"`
@@ -89,7 +130,7 @@ export default {
 
             // Reescreve URLs de segmentos .ts e submanifestos
             try {
-              const absoluteUrl = new URL(trimmed, targetUrl).toString()
+              const absoluteUrl = normalizeUrlForCloudflare(new URL(trimmed, finalUrl).toString())
               return `${workerOrigin}?url=${encodeURIComponent(absoluteUrl)}`
             } catch {
               return line
