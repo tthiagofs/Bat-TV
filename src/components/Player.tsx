@@ -268,10 +268,21 @@ export default function Player({
     resetHideTimer()
   }, [resetHideTimer])
 
+  // Pular Abertura (+30s) para Séries - duração de 5 segundos
+  const [showFloatingSkip, setShowFloatingSkip] = useState(false)
+  const floatingSkipTimer = useRef<number | undefined>(undefined)
+  const hasShownSkipIntroRef = useRef(false)
+
   // Toque/Clique na tela: se fechado, abre e permanece por 4.5s; se aberto, fecha imediatamente
   const toggleControlsViaTap = useCallback((e?: React.SyntheticEvent) => {
     if (e) {
       e.stopPropagation()
+    }
+
+    // Se o botão flutuante de pular abertura estiver visível, fecha imediatamente ao clicar na tela
+    if (showFloatingSkip) {
+      setShowFloatingSkip(false)
+      window.clearTimeout(floatingSkipTimer.current)
     }
 
     // Se estava mudo pelo autoplay do mobile, ativa o som no primeiro toque
@@ -300,44 +311,37 @@ export default function Player({
       }
       return next
     })
-  }, [showQuickZap, showQualityMenu, showAudioSubMenu, needsUnmute, needsUserGesture])
+  }, [showQuickZap, showQualityMenu, showAudioSubMenu, needsUnmute, needsUserGesture, showFloatingSkip])
 
   const [time, setTime] = useState({ current: 0, duration: 0 })
   const [epg, setEpg] = useState<EpgEntry[]>([])
   const [nowSec, setNowSec] = useState(() => Date.now() / 1000)
-
-  // Pular Abertura (+30s) para Séries
-  const [showFloatingSkip, setShowFloatingSkip] = useState(false)
-  const floatingSkipTimer = useRef<number | undefined>(undefined)
 
   const startFloatingSkipTimer = useCallback(() => {
     window.clearTimeout(floatingSkipTimer.current)
     setShowFloatingSkip(true)
     floatingSkipTimer.current = window.setTimeout(() => {
       setShowFloatingSkip(false)
-      // Se o foco estava no botão flutuante que sumiu após 10s, transfere suavemente para a barra ou play
+      // Se o foco estava no botão flutuante que sumiu após 5s, transfere suavemente para a barra ou play
       if (document.activeElement?.id === 'player-skip-intro-floating-btn') {
         const fallback = document.getElementById('player-progress') || document.getElementById('player-play')
         fallback?.focus()
       }
-    }, 10000)
+    }, 5000)
   }, [])
 
-  // Nos primeiros 10 segundos do episódio de série, exibe o botão flutuante já com foco automático para clique rápido
+  // Exibe o botão de pular abertura apenas quando o episódio realmente começa a tocar nos primeiros 60 segundos
   useEffect(() => {
-    if (!isSeries) {
-      setShowFloatingSkip(false)
-      return
+    if (!isSeries || !playing || hasShownSkipIntroRef.current) return
+    if (time.current < 60) {
+      hasShownSkipIntroRef.current = true
+      startFloatingSkipTimer()
+      const timer = setTimeout(() => {
+        document.getElementById('player-skip-intro-floating-btn')?.focus()
+      }, 300)
+      return () => clearTimeout(timer)
     }
-    startFloatingSkipTimer()
-    const timer = setTimeout(() => {
-      document.getElementById('player-skip-intro-floating-btn')?.focus()
-    }, 300)
-    return () => {
-      window.clearTimeout(floatingSkipTimer.current)
-      clearTimeout(timer)
-    }
-  }, [url, isSeries, startFloatingSkipTimer])
+  }, [isSeries, playing, time.current, startFloatingSkipTimer])
 
 
 
@@ -826,15 +830,16 @@ export default function Player({
     wake()
   }, [isLive, wake, isNative, time.duration, time.current])
 
-  // Clique no botão avança +30 segundos com segurança e reinicia o temporizador
+  // Clique no botão avança +30 segundos com segurança e fecha o botão flutuante
   const handleSkipIntro = useCallback(() => {
+    setShowFloatingSkip(false)
+    window.clearTimeout(floatingSkipTimer.current)
     const dur = time.duration > 0 ? time.duration : Infinity
     const cur = time.current
     const nextTime = Math.max(0, Math.min(dur, cur + 30))
     if (isNative) {
       NativePlayer.seekTo({ position: nextTime }).catch(() => {})
       setTime((prev) => ({ ...prev, current: nextTime }))
-      startFloatingSkipTimer()
       wake()
       return
     }
@@ -846,9 +851,8 @@ export default function Player({
     } catch (err) {
       console.warn('Erro ao pular abertura:', err)
     }
-    startFloatingSkipTimer()
     wake()
-  }, [startFloatingSkipTimer, wake, isNative, time.duration, time.current])
+  }, [wake, isNative, time.duration, time.current])
 
   useEffect(() => {
     wake()

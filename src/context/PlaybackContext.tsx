@@ -366,6 +366,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
           )}
         >
           <Player
+            key={current.url}
             url={current.url}
             title={current.title}
             isLive={current.isLive}
