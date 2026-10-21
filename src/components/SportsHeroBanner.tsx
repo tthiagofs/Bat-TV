@@ -5,7 +5,9 @@ import { usePlayback } from '../context/PlaybackContext'
 import { useAuth } from '../context/AuthContext'
 import { getItems } from '../services/catalog'
 
-import { findBestLiveChannel } from '../utils/channelMatcher'
+import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
+import SportsChannelPickerModal from './SportsChannelPickerModal'
+import type { MediaItem } from '../types'
 import stadium1 from '../assets/stadiums/stadium1.jpg'
 import stadium2 from '../assets/stadiums/stadium2.jpg'
 import stadium3 from '../assets/stadiums/stadium3.jpg'
@@ -23,6 +25,11 @@ function SportsHeroBannerBase({ matches }: Props) {
   const [reminded, setReminded] = useState<Record<string, boolean>>({})
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [isBannerFocused, setIsBannerFocused] = useState(false)
+  const [pickerData, setPickerData] = useState<{
+    match: Match
+    options: MatchedChannelOption[]
+    liveList: MediaItem[]
+  } | null>(null)
 
   // Suporte a gestos touch swipe em celulares
   const touchStartX = useRef<number | null>(null)
@@ -102,7 +109,18 @@ function SportsHeroBannerBase({ matches }: Props) {
     try {
       const liveList = await getItems(service, 'live', 'all')
       const targets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
-      const found = findBestLiveChannel(liveList, targets)
+      const matched = findAllMatchingLiveChannels(liveList, targets)
+
+      if (matched.length > 1) {
+        setPickerData({
+          match: current,
+          options: matched,
+          liveList,
+        })
+        return
+      }
+
+      const found = matched[0]?.channel || findBestLiveChannel(liveList, targets)
       if (found) play(found, { playlist: liveList })
     } catch {
       // ignore
@@ -540,6 +558,19 @@ function SportsHeroBannerBase({ matches }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {pickerData && (
+        <SportsChannelPickerModal
+          match={pickerData.match}
+          options={pickerData.options}
+          onSelectChannel={(ch) => {
+            const list = pickerData.liveList
+            setPickerData(null)
+            play(ch, { playlist: list })
+          }}
+          onClose={() => setPickerData(null)}
+        />
       )}
     </div>
   )

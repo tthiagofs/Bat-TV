@@ -16,6 +16,8 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.DefaultLoadControl;
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.ui.AspectRatioFrameLayout;
@@ -82,8 +84,25 @@ public class NativePlayerPlugin extends Plugin {
         DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(getContext())
                 .setDataSourceFactory(httpSourceFactory);
 
+        DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                        8000,  // minBufferMs (8s para segurar oscilacoes de rede)
+                        25000, // maxBufferMs (25s)
+                        2500,  // bufferForPlaybackMs (2.5s para play rapido)
+                        4000   // bufferForPlaybackAfterRebufferMs (4s)
+                )
+                .build();
+
+        DefaultLivePlaybackSpeedControl liveSpeedControl = new DefaultLivePlaybackSpeedControl.Builder()
+                .setFallbackMaxPlaybackSpeed(1.05f) // limite suave de 5% de aceleracao (imperceptivel)
+                .setFallbackMinPlaybackSpeed(0.97f)
+                .setMinUpdateIntervalMs(1000)
+                .build();
+
         exoPlayer = new ExoPlayer.Builder(getContext())
                 .setMediaSourceFactory(mediaSourceFactory)
+                .setLoadControl(loadControl)
+                .setLivePlaybackSpeedControl(liveSpeedControl)
                 .build();
 
         exoPlayer.addListener(new Player.Listener() {

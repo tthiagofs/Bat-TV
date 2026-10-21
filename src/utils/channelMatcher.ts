@@ -109,3 +109,52 @@ export function findBestLiveChannel(
 
   return null
 }
+
+export interface MatchedChannelOption {
+  targetName: string
+  channel: MediaItem
+  quality: string
+}
+
+/**
+ * Encontra todos os canais correspondentes distintos da lista IPTV
+ * para os canais transmitindo a partida (ex: ESPN, CazéTV, Premiere).
+ */
+export function findAllMatchingLiveChannels(
+  liveList: MediaItem[],
+  targets: string | string[]
+): MatchedChannelOption[] {
+  if (!liveList || liveList.length === 0 || !targets) return []
+
+  const targetList = Array.isArray(targets) ? targets : [targets]
+  const cleanedTargets = targetList
+    .map((t) => (t || '').trim())
+    .filter(Boolean)
+
+  if (cleanedTargets.length === 0) return []
+
+  const results: MatchedChannelOption[] = []
+  const seenIds = new Set<number>()
+
+  for (const target of cleanedTargets) {
+    const best = findBestLiveChannel(liveList, target)
+    if (best && !seenIds.has(best.id)) {
+      seenIds.add(best.id)
+
+      let quality = 'HD'
+      const lower = best.name.toLowerCase()
+      if (lower.includes('4k') || lower.includes('uhd')) quality = '4K'
+      else if (lower.includes('fhd') || lower.includes('1080')) quality = 'FHD'
+      else if (lower.includes('sd') || lower.includes('480')) quality = 'SD'
+      else if (lower.includes('hd') || lower.includes('720')) quality = 'HD'
+
+      results.push({
+        targetName: target,
+        channel: best,
+        quality,
+      })
+    }
+  }
+
+  return results
+}
