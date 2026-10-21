@@ -15,6 +15,7 @@ import {
   type DownloadedMedia,
 } from './downloadDb'
 import { backgroundKeepAlive } from './backgroundKeepAlive'
+import { buildProxyUrl } from './proxyConfig'
 
 declare global {
   interface Window {
@@ -329,8 +330,7 @@ class DownloadManager {
 
       // Se for Web / iOS, sempre prefere container MP4 (Xtream faz remux automático e Safari suporta 100%)
       const targetUrl = item.remoteUrl.replace(/\.mkv$/i, '.mp4')
-      const proxyEndpoint = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
-      const proxyUrl = `${proxyEndpoint}?url=${encodeURIComponent(targetUrl)}`
+      const proxyUrl = buildProxyUrl(targetUrl)
 
       // 1. Tenta descobrir o tamanho total do arquivo
       let totalBytes = item.totalBytes || 0

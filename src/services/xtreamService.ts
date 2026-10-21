@@ -1,4 +1,5 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { buildProxyUrl } from './proxyConfig'
 
 export interface Credentials {
   server: string
@@ -173,9 +174,8 @@ export class XtreamService {
     }
 
     // 3. Ambiente Web (Navegador Safari / Chrome / Vercel): usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS
-    const proxyBase = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
     try {
-      const proxyUrl = `${proxyBase}?url=${encodeURIComponent(fullUrl)}`
+      const proxyUrl = buildProxyUrl(fullUrl)
       const res = await fetch(proxyUrl)
       if (res.ok) {
         return (await res.json()) as T

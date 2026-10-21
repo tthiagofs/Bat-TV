@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { buildProxyUrl } from './proxyConfig'
 import type { Club } from '../data/teams'
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer'
@@ -188,9 +189,7 @@ async function fetchEspnJson<T = Json>(url: string, ttlMs = 120_000): Promise<T>
     window.location.protocol !== 'file:' &&
     !Capacitor.isNativePlatform()
 
-  const targetUrl = isWeb
-    ? (import.meta.env.DEV ? `/iptv-proxy?url=${encodeURIComponent(url)}` : `/api/proxy?url=${encodeURIComponent(url)}`)
-    : url
+  const targetUrl = isWeb ? buildProxyUrl(url) : url
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 7000) // 7s timeout max

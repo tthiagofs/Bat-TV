@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import Hls from 'hls.js'
 import { Capacitor } from '@capacitor/core'
 import { NativePlayer } from '../plugins/NativePlayer'
+import { buildProxyUrl } from '../services/proxyConfig'
 import {
   X, Play, Pause, Volume2, Volume1, VolumeX, Maximize, Minimize, RectangleHorizontal, Loader2, Radio,
   FastForward, SkipForward, Sliders, Check, Languages, MessageSquare, ListVideo, Search, Tv,
@@ -481,9 +482,8 @@ export default function Player({
     // No Electron (PC Desktop) e no Capacitor (Android APK), a conexão de vídeo vai DIRETO ao servidor de IPTV.
     // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
     let streamUrl = rawUrl
-    const proxyEndpoint = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
     if (!Capacitor.isNativePlatform() && !isElectronEnv && (streamUrl.startsWith('http://') || streamUrl.startsWith('https://'))) {
-      streamUrl = `${proxyEndpoint}?url=${encodeURIComponent(streamUrl)}`
+      streamUrl = buildProxyUrl(streamUrl)
     }
 
     const isHls = (rawUrl.includes('.m3u8') || (isLive && streamAttempt === 'm3u8')) && Hls.isSupported()

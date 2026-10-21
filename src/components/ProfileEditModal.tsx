@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { X, Lock, Unlock, Trash2, Search, History, Trophy, Camera, Check, Sparkles, Zap } from 'lucide-react'
+import { X, Lock, Unlock, Trash2, Search, History, Trophy, Camera, Check, Sparkles, Zap, Globe } from 'lucide-react'
 import { useProfiles } from '../context/ProfileContext'
 import type { Profile } from '../services/profileDb'
 import { Avatar } from '../data/avatars'
 import { clubByKey } from '../data/teams'
+import { getCustomProxy, setCustomProxy } from '../services/proxyConfig'
 import AvatarPickerModal from './AvatarPickerModal'
 import TeamSelectorModal from './TeamSelectorModal'
 import GenrePreferencesModal from './GenrePreferencesModal'
@@ -25,6 +26,7 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
   const [showTeamSelector, setShowTeamSelector] = useState(false)
   const [showGenreSelector, setShowGenreSelector] = useState(false)
   const [isLiteMode, setIsLiteMode] = useState(() => profile.liteMode ?? (localStorage.getItem('iptv-rea:lite') === '1'))
+  const [customProxy, setCustomProxyInput] = useState(() => getCustomProxy())
   const [msg, setMsg] = useState('')
 
   const toggleLiteMode = () => {
@@ -47,6 +49,7 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
       preferredGenres,
       liteMode: isLiteMode,
     })
+    setCustomProxy(customProxy)
     if (pin.length === 4) {
       await setPin(profile.id, pin)
     }
@@ -277,6 +280,29 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
                   <span>Limpar Assistidos</span>
                 </button>
               </div>
+            </div>
+
+            {/* Proxy de Vídeo Externo (Cloudflare Worker - Tráfego Ilimitado) */}
+            <div className="space-y-2 pt-2 border-t border-zinc-800">
+              <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Globe size={14} className="text-sky-400" />
+                  Proxy de Vídeo (Cloudflare Worker)
+                </span>
+                <span className="text-[10px] text-zinc-500 font-normal">Opcional</span>
+              </label>
+              <input
+                type="url"
+                value={customProxy}
+                onChange={(e) => setCustomProxyInput(e.target.value)}
+                placeholder="https://meu-worker.workers.dev"
+                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                {customProxy
+                  ? 'Ativo: Vídeos e downloads passam pelo Cloudflare com tráfego ilimitado (0 GB na Vercel).'
+                  : 'Vazio: Usando servidor Vercel (limite gratuito de 10 GB/mês).'}
+              </p>
             </div>
 
             {/* Excluir Perfil */}
