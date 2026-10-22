@@ -6,7 +6,7 @@ import { buildProxyUrl } from '../services/proxyConfig'
 import {
   X, Play, Pause, Volume2, Volume1, VolumeX, Maximize, Minimize, RectangleHorizontal, Loader2, Radio,
   FastForward, SkipForward, Sliders, Check, Languages, MessageSquare, ListVideo, Search, Tv,
-  AlertTriangle, RotateCcw, Bug, Terminal, Copy
+  AlertTriangle, RotateCcw
 } from 'lucide-react'
 import type { EpgEntry } from '../services/xtreamService'
 import type { MediaItem } from '../types'
@@ -275,16 +275,6 @@ export default function PwaPlayer({
   const [forceLandscape, setForceLandscape] = useState(true)
   const [isDraggingProgress, setIsDraggingProgress] = useState(false)
   const [dragProgressVal, setDragProgressVal] = useState<number | null>(null)
-  const [showDebug, setShowDebug] = useState(false)
-  const [debugLogs, setDebugLogs] = useState<string[]>([])
-  const streamUrlRef = useRef('')
-
-  const addDebugLog = useCallback((msg: string) => {
-    const timeStr = new Date().toLocaleTimeString('pt-BR', { hour12: false })
-    const line = `[${timeStr}] ${msg}`
-    setDebugLogs((prev) => [line, ...prev.slice(0, 30)])
-    console.log(`[PwaPlayer] ${line}`)
-  }, [])
 
   // Detecta se está rodando no ambiente desktop Electron (pacote PC instalado ou executável)
   const isElectronEnv = typeof window !== 'undefined' && (
@@ -599,39 +589,32 @@ export default function PwaPlayer({
     if (!Capacitor.isNativePlatform() && !isElectronEnv && /^https?:\/\//i.test(streamUrl)) {
       streamUrl = buildProxyUrl(streamUrl)
     }
-    streamUrlRef.current = streamUrl
-    addDebugLog(`Carregando stream: ${streamUrl}`)
 
     const tryStartPlayback = (v: HTMLVideoElement) => {
-      addDebugLog('tryStartPlayback chamado')
       v.muted = true
       setMuted(true)
       const playPromise = v.play()
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            addDebugLog('Reprodução iniciada com sucesso (play resolved)')
             setBuffering(false)
             setPlaying(true)
             setNeedsUserGesture(false)
             setNeedsUnmute(true)
           })
-          .catch((err) => {
-            addDebugLog(`Autoplay rejeitado pelo WebKit: ${err?.message || err}`)
+          .catch(() => {
             v.muted = true
             setMuted(true)
             const mutedPromise = v.play()
             if (mutedPromise !== undefined) {
               mutedPromise
                 .then(() => {
-                  addDebugLog('Autoplay mudo iniciado com sucesso')
                   setBuffering(false)
                   setPlaying(true)
                   setNeedsUserGesture(false)
                   setNeedsUnmute(true)
                 })
-                .catch((err2) => {
-                  addDebugLog(`Autoplay mudo também bloqueado: ${err2?.message || err2}`)
+                .catch(() => {
                   setBuffering(false)
                   setPlaying(false)
                   setNeedsUserGesture(true)
@@ -653,7 +636,6 @@ export default function PwaPlayer({
       hls.loadSource(streamUrl)
       hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
-        addDebugLog(`HLS Manifesto Carregado. Níveis: ${data.levels?.length || 0}`)
         tryStartPlayback(video)
         if (data.levels && data.levels.length > 1) {
           const lvls = data.levels.map((l, i) => ({
@@ -682,7 +664,6 @@ export default function PwaPlayer({
         }
       })
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        addDebugLog(`HLS Erro: type=${data.type} details=${data.details} fatal=${data.fatal}`)
         if (!data.fatal) {
           // Recupera automaticamente pequenas estagnações de buffer sem congelar a tela
           if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
@@ -794,19 +775,29 @@ export default function PwaPlayer({
       return
     }
 
-    // 2. No iPhone / PWA: tenta fullscreen nativo do elemento de vídeo WebKit
-    if (v && typeof v.webkitEnterFullscreen === 'function') {
-      try {
-        v.webkitEnterFullscreen()
-        setFullscreen(true)
+    // 2. Se o usuário estiver no celular com a tela em pé (isPortrait):
+    // Como a trava de orientação vertical do iOS pode estar ligada, o QuickTime do iOS
+    // forçaria o vídeo para vertical se chamado. Por isso, mantemos a rotação horizontal
+    // inteligente em 90 graus e alternamos para preenchimento total (simula tela cheia)!
+    if (isMobileDevice && isPortrait) {
+      if (c && typeof c.requestFullscreen === 'function') {
+        c.requestFullscreen()
+          .then(() => {
+            try {
+              if (screen.orientation && 'lock' in screen.orientation) {
+                ;(screen.orientation as any).lock('landscape').catch(() => {})
+              }
+            } catch {}
+            setFullscreen(true)
+          })
+          .catch(() => {})
         return
-      } catch {}
-    }
+      }
 
-    if (c && typeof c.requestFullscreen === 'function') {
-      c.requestFullscreen()
-        .then(() => setFullscreen(true))
-        .catch(() => {})
+      // No Safari do iPhone: alterna proporção para preenchimento total e fecha controles
+      setForceLandscape(true)
+      setAspect((prev) => (prev === 'contain' ? 'cover' : 'contain'))
+      setShowControls(false)
       return
     }
 
@@ -821,6 +812,20 @@ export default function PwaPlayer({
           }
         })
       return
+    }
+
+    if (c && typeof c.webkitRequestFullscreen === 'function') {
+      c.webkitRequestFullscreen()
+      setFullscreen(true)
+      return
+    }
+
+    if (v && typeof v.webkitEnterFullscreen === 'function') {
+      try {
+        v.webkitEnterFullscreen()
+        setFullscreen(true)
+        return
+      } catch {}
     }
 
     if (c && typeof c.webkitRequestFullscreen === 'function') {
@@ -1493,38 +1498,23 @@ export default function PwaPlayer({
             'x-webkit-airplay': 'deny',
           }}
           onPlay={() => {
-            addDebugLog('video onPlay')
             setPlaying(true)
             setNeedsUserGesture(false)
           }}
-          onPause={() => {
-            addDebugLog('video onPause')
-            setPlaying(false)
-          }}
-          onWaiting={() => {
-            addDebugLog('video onWaiting')
-            setBuffering(true)
-          }}
+          onPause={() => setPlaying(false)}
+          onWaiting={() => setBuffering(true)}
           onSeeking={() => setBuffering(true)}
           onSeeked={() => setBuffering(false)}
           onPlaying={() => {
-            addDebugLog('video onPlaying')
             setBuffering(false)
             setPlaying(true)
             setNeedsUserGesture(false)
           }}
-          onCanPlay={() => {
-            addDebugLog('video onCanPlay')
-            setBuffering(false)
-          }}
-          onLoadedData={() => {
-            addDebugLog('video onLoadedData')
-            setBuffering(false)
-          }}
+          onCanPlay={() => setBuffering(false)}
+          onLoadedData={() => setBuffering(false)}
           onError={(e) => {
             const videoEl = e.currentTarget
             const mediaErr = videoEl.error
-            addDebugLog(`video onError: code=${mediaErr?.code} msg=${mediaErr?.message}`)
 
             // 1. Ignora cancelamentos intencionais do navegador (código 1 = MEDIA_ERR_ABORTED ao dar seek)
             if (mediaErr && mediaErr.code === 1) {
@@ -1699,7 +1689,7 @@ export default function PwaPlayer({
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         style={{
-          paddingLeft: 'max(env(safe-area-inset-left, 0px), 1rem)',
+          paddingLeft: isRotatedLandscape ? 'max(env(safe-area-inset-top, 0px), 4rem)' : 'max(env(safe-area-inset-left, 0px), 2.5rem)',
         }}
         onClick={(e) => {
           e.stopPropagation()
@@ -1712,7 +1702,7 @@ export default function PwaPlayer({
             e.stopPropagation()
             onClose()
           }}
-          className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-rose-600 active:scale-95 text-white transition cursor-pointer touch-manipulation"
+          className="ml-2 sm:ml-4 p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-rose-600 active:scale-95 text-white transition cursor-pointer touch-manipulation"
           aria-label="Fechar (Esc)"
           title="Fechar (Esc)"
         >
@@ -1724,18 +1714,6 @@ export default function PwaPlayer({
             <Radio size={11} /> AO VIVO
           </span>
         )}
-        {/* Botão de Diagnóstico / Logs */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowDebug(true)
-          }}
-          className="p-1.5 sm:p-2 rounded-full bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition border border-amber-500/30"
-          title="Ver Logs e Diagnóstico"
-        >
-          <Bug size={16} />
-          <span className="text-[11px] font-semibold hidden sm:inline">Logs</span>
-        </button>
         {/* Botão de Girar Orientação (Mobile) */}
         {isMobileDevice && (
           <button
@@ -2295,85 +2273,6 @@ export default function PwaPlayer({
             >
               Cancelar
             </button>
-          </div>
-        </div>
-      )}
-      {/* Modal de Diagnóstico e Logs do Player */}
-      {showDebug && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 select-text pointer-events-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-xs text-zinc-300">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-950">
-              <div className="flex items-center gap-2">
-                <Bug size={18} className="text-amber-400" />
-                <h3 className="font-bold text-white text-sm">Diagnóstico & Logs do Player</h3>
-              </div>
-              <button
-                onClick={() => setShowDebug(false)}
-                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 overflow-y-auto font-mono text-[11px] leading-relaxed">
-              <div className="p-2.5 bg-black/60 rounded-xl space-y-1">
-                <div><span className="text-zinc-500">URL Ativa:</span> <span className="text-white break-all">{activeUrl}</span></div>
-                <div><span className="text-zinc-500">Stream Proxy:</span> <span className="text-amber-300 break-all">{streamUrlRef.current}</span></div>
-                <div className="flex gap-4 pt-1 flex-wrap">
-                  <div><span className="text-zinc-500">ReadyState:</span> <span className="text-emerald-400 font-bold">{videoRef.current?.readyState ?? 'N/A'}</span></div>
-                  <div><span className="text-zinc-500">NetworkState:</span> <span className="text-emerald-400 font-bold">{videoRef.current?.networkState ?? 'N/A'}</span></div>
-                  <div><span className="text-zinc-500">Pausado:</span> <span className="text-zinc-300">{videoRef.current?.paused ? 'Sim' : 'Não'}</span></div>
-                  <div><span className="text-zinc-500">Mudo:</span> <span className="text-zinc-300">{videoRef.current?.muted ? 'Sim' : 'Não'}</span></div>
-                </div>
-              </div>
-
-              <div>
-                <p className="font-bold text-zinc-400 pb-1">Histórico de Eventos Recentes:</p>
-                <div className="bg-black/80 rounded-xl p-2.5 max-h-48 overflow-y-auto space-y-1 text-zinc-300">
-                  {debugLogs.length === 0 ? (
-                    <p className="text-zinc-600">Nenhum evento registrado ainda.</p>
-                  ) : (
-                    debugLogs.map((log, i) => (
-                      <div key={i} className="border-b border-zinc-800/50 pb-0.5 last:border-none">
-                        {log}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const report = `BAT TV Relatório:\nURL: ${activeUrl}\nProxy: ${streamUrlRef.current}\nReadyState: ${videoRef.current?.readyState}\nNetworkState: ${videoRef.current?.networkState}\nError: ${JSON.stringify(videoRef.current?.error)}\nLogs:\n${debugLogs.join('\n')}`
-                  navigator.clipboard.writeText(report).then(() => alert('Relatório copiado para a área de transferência!')).catch(() => {})
-                }}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-              >
-                <Copy size={14} />
-                <span>Copiar Relatório</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if ((window as any).eruda) {
-                    (window as any).eruda.show()
-                  } else {
-                    alert('Eruda Console não disponível')
-                  }
-                }}
-                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold flex items-center gap-1.5 active:scale-95 transition cursor-pointer"
-              >
-                <Terminal size={14} />
-                <span>Abrir DevTools (Eruda)</span>
-              </button>
-            </div>
           </div>
         </div>
       )}
