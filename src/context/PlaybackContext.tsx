@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Player from '../components/Player'
+import PwaPlayer from '../components/PwaPlayer'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { useAuth } from './AuthContext'
 import { useProfiles } from './ProfileContext'
@@ -49,6 +50,16 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
   const historyRef = useRef(active?.history ?? [])
   historyRef.current = active?.history ?? []
+
+  // Detecta se está rodando no PWA instalado (Standalone / Tela de Início no iPhone ou Android)
+  const isPwa = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return (
+      (window.navigator as any).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches
+    )
+  }, [])
 
   // Garante que nenhum trailer toque no fundo enquanto o player estiver aberto
   useEffect(() => {
@@ -365,25 +376,47 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
             </div>
           )}
         >
-          <Player
-            key={current.url}
-            url={current.url}
-            title={current.title}
-            isLive={current.isLive}
-            startAt={current.startAt}
-            onClose={() => setCurrent(null)}
-            onPrev={current.isLive ? zapPrev : undefined}
-            onNext={current.isLive ? zapNext : undefined}
-            channelLabel={channelLabel}
-            getEpg={getEpg}
-            onProgress={current.isLive ? undefined : onProgress}
-            isSeries={current.item.type === 'series'}
-            onNextEpisode={nextEpisodeTitle ? playNextEpisode : undefined}
-            nextEpisodeTitle={nextEpisodeTitle}
-            channelVariants={channelVariants}
-            channelsList={live}
-            onSelectChannel={(ch) => play(ch, { playlist })}
-          />
+          {isPwa ? (
+            <PwaPlayer
+              key={current.url}
+              url={current.url}
+              title={current.title}
+              isLive={current.isLive}
+              startAt={current.startAt}
+              onClose={() => setCurrent(null)}
+              onPrev={current.isLive ? zapPrev : undefined}
+              onNext={current.isLive ? zapNext : undefined}
+              channelLabel={channelLabel}
+              getEpg={getEpg}
+              onProgress={current.isLive ? undefined : onProgress}
+              isSeries={current.item.type === 'series'}
+              onNextEpisode={nextEpisodeTitle ? playNextEpisode : undefined}
+              nextEpisodeTitle={nextEpisodeTitle}
+              channelVariants={channelVariants}
+              channelsList={live}
+              onSelectChannel={(ch) => play(ch, { playlist })}
+            />
+          ) : (
+            <Player
+              key={current.url}
+              url={current.url}
+              title={current.title}
+              isLive={current.isLive}
+              startAt={current.startAt}
+              onClose={() => setCurrent(null)}
+              onPrev={current.isLive ? zapPrev : undefined}
+              onNext={current.isLive ? zapNext : undefined}
+              channelLabel={channelLabel}
+              getEpg={getEpg}
+              onProgress={current.isLive ? undefined : onProgress}
+              isSeries={current.item.type === 'series'}
+              onNextEpisode={nextEpisodeTitle ? playNextEpisode : undefined}
+              nextEpisodeTitle={nextEpisodeTitle}
+              channelVariants={channelVariants}
+              channelsList={live}
+              onSelectChannel={(ch) => play(ch, { playlist })}
+            />
+          )}
         </ErrorBoundary>
       )}
 
