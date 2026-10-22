@@ -2,6 +2,14 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
+import eruda from 'eruda'
+
+// Inicializa o Eruda (painel DevTools com Console e Network direto na tela do celular)
+if (typeof window !== 'undefined') {
+  try {
+    eruda.init()
+  } catch {}
+}
 
 // Modo Leve (sem blur de fundo): ligado por padrão; desligue com localStorage['iptv-rea:lite']='0'
 if (localStorage.getItem('iptv-rea:lite') !== '0') document.documentElement.classList.add('lite')
