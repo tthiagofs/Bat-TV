@@ -104,15 +104,41 @@ html.tv-perf-mode nav {
   background-color: #09090b !important;
 }
 
-/* Desativa sombras pesadas de GPU no Fire Stick */
+/* Desativa sombras pesadas de GPU no Fire Stick e TV TCL */
 html.tv-perf-mode * {
   box-shadow: none !important;
   text-shadow: none !important;
 }
 
+/* Modo TV Ultra Fluidez Estilo Prime Video / Netflix (60 FPS Nativos) */
+html.tv-perf-mode .scroll-smooth {
+  scroll-behavior: auto !important;
+}
+
+/* Foco ultra ágil estilo Prime Video: 50ms em vez de 200ms elástico */
+html.tv-perf-mode button,
+html.tv-perf-mode a,
+html.tv-perf-mode [tabindex="0"] {
+  transition: transform 50ms cubic-bezier(0, 0, 0.2, 1) !important;
+  will-change: transform;
+}
+
+html.tv-perf-mode [tabindex="0"]:focus-visible,
+html.tv-perf-mode button:focus-visible,
+html.tv-perf-mode a:focus-visible {
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-ring-offset-shadow: none !important;
+  --tw-shadow: none !important;
+  --tw-shadow-colored: none !important;
+  outline: 3px solid #f43f5e !important;
+  outline-offset: 2px !important;
+  transform: scale(1.03) translateZ(0) !important;
+}
+
 /* Animações e transições ultra rápidas para resposta do controle remoto */
 html.tv-perf-mode .fade-up {
-  animation-duration: 0.1s !important;
+  animation-duration: 0.08s !important;
 }
 
 html.tv-perf-mode .animate-pulse {
@@ -120,11 +146,18 @@ html.tv-perf-mode .animate-pulse {
   opacity: 1 !important;
 }
 
-/* Foco rápido e visível do controle remoto da TV */
-html.tv-perf-mode button,
-html.tv-perf-mode a,
-html.tv-perf-mode [tabindex="0"] {
-  transition-duration: 80ms !important;
+/* Otimização de carrosséis: composição direta em camadas de GPU da TV */
+html.tv-perf-mode .overflow-x-auto {
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-x: contain !important;
+  will-change: scroll-position !important;
+  transform: translateZ(0) !important;
+}
+
+/* Seções de catálogo: renderização isolada para zero custo de reflow fora da tela */
+html.tv-perf-mode section {
+  content-visibility: auto !important;
+  contain-intrinsic-size: 1px 260px !important;
 }
 
 /* Estilo global de Foco do Controle Remoto (D-Pad TV & Teclado) */

@@ -48,6 +48,11 @@ public class MainActivity extends BridgeActivity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             settings.setDomStorageEnabled(true);
             settings.setDatabaseEnabled(true);
+            settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                settings.setOffscreenPreRaster(true);
+            }
             webView.setWebChromeClient(new WebChromeClient());
 
             // Informa a web view se é um dispositivo de TV para ligar o modo de ultra desempenho
