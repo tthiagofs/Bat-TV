@@ -5,8 +5,7 @@ import './services/tvModeService'
 import App from './App'
 
 
-// Modo Leve (sem blur de fundo): ligado por padrão; desligue com localStorage['iptv-rea:lite']='0'
-if (localStorage.getItem('iptv-rea:lite') !== '0') document.documentElement.classList.add('lite')
+// Gerenciamento dinâmico de performance realizado por ./services/tvModeService
 
 // Registro do Service Worker para PWA (sem loops de reload)
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {

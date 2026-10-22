@@ -16,16 +16,18 @@ const STORAGE_KEY = 'iptv-rea:tv-perf-setting'
 export function isHardwareTvDetected(): boolean {
   if (typeof window === 'undefined') return false
 
-  // 1. Injetado pelo Android nativo (MainActivity.java via UiModeManager / Leanback)
-  if (window.__IS_ANDROID_TV__ === true) return true
-
-  // 2. Parâmetro de URL para testes imediatos no PC ou navegador
   const search = window.location.search.toLowerCase()
+  if (search.includes('tv_mode=0') || search.includes('tv_mode=false')) {
+    return false
+  }
   if (search.includes('tv_mode=1') || search.includes('tv_mode=true') || search.includes('perf=tv')) {
     return true
   }
 
-  // 3. UserAgent de TVs conhecidas (Amazon Fire TV, TCL, AndroidTV, etc.)
+  // Injetado pelo Android nativo (MainActivity.java via UiModeManager / Leanback)
+  if (window.__IS_ANDROID_TV__ === true) return true
+
+  // UserAgent de TVs conhecidas (Amazon Fire TV, TCL, AndroidTV, etc.)
   const ua = window.navigator.userAgent.toLowerCase()
   const tvKeywords = [
     'aft', // Amazon Fire TV (AFTMM, AFTSS, AFTT, etc.)
@@ -62,6 +64,16 @@ export function setTvPerformanceSetting(setting: TvPerformanceSetting): void {
 }
 
 export function isTvPerformanceActive(): boolean {
+  if (typeof window !== 'undefined') {
+    const search = window.location.search.toLowerCase()
+    if (search.includes('tv_mode=1') || search.includes('tv_mode=true') || search.includes('perf=tv')) {
+      return true
+    }
+    if (search.includes('tv_mode=0') || search.includes('tv_mode=false')) {
+      return false
+    }
+  }
+
   const setting = getTvPerformanceSetting()
   if (setting === 'on') return true
   if (setting === 'off') return false
