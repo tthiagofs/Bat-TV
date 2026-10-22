@@ -775,11 +775,11 @@ export default function PwaPlayer({
       return
     }
 
-    // 2. No celular (iPhone / Android) em tela cheia:
-    // O reprodutor nativo QuickTime da Apple (v.webkitEnterFullscreen) ignora o modo 'Preencher'
-    // e adiciona bordas pretas nos 4 cantos da tela.
-    // Como o app já ocupa 100% da tela física, alternamos entre 'Ajustar' e 'Preencher' (tela cheia real):
-    if (isMobileDevice) {
+    // 2. Se o usuário estiver no celular com a tela em pé (isPortrait):
+    // Como a trava de orientação vertical do iOS pode estar ligada, o QuickTime do iOS
+    // forçaria o vídeo para vertical se chamado. Por isso, mantemos a rotação horizontal
+    // inteligente em 90 graus e fechamos os controles (simula tela cheia sem cortar legendas):
+    if (isMobileDevice && isPortrait) {
       if (c && typeof c.requestFullscreen === 'function') {
         c.requestFullscreen()
           .then(() => {
@@ -794,19 +794,22 @@ export default function PwaPlayer({
         return
       }
 
-      if (isPortrait) {
-        setForceLandscape(true)
-      }
-      setAspect((prev) => (prev === 'contain' ? 'cover' : 'contain'))
+      // No iPhone em pé: ativa rotação horizontal e fecha controles (mantém a proporção atual para não cortar legendas)
+      setForceLandscape(true)
       setShowControls(false)
       return
     }
 
-    // 3. Desktop / TV:
+    // 3. Se o aparelho já estiver fisicamente na horizontal (rotação liberada) ou Desktop:
     if (c && typeof c.requestFullscreen === 'function') {
       c.requestFullscreen()
         .then(() => setFullscreen(true))
-        .catch(() => {})
+        .catch(() => {
+          if (v && typeof v.webkitEnterFullscreen === 'function') {
+            v.webkitEnterFullscreen()
+            setFullscreen(true)
+          }
+        })
       return
     }
 
@@ -816,6 +819,7 @@ export default function PwaPlayer({
       return
     }
 
+    // Tela cheia ORIGINAL do iPhone (QuickTime nativo da Apple):
     if (v && typeof v.webkitEnterFullscreen === 'function') {
       try {
         v.webkitEnterFullscreen()
@@ -825,6 +829,8 @@ export default function PwaPlayer({
         console.warn('Erro ao abrir tela cheia nativa no Safari:', err)
       }
     }
+
+
 
     setForceLandscape((prev) => !prev)
   }, [isMobileDevice, isPortrait])
