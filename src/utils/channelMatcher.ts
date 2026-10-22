@@ -18,13 +18,15 @@ const CHANNEL_ALIASES: Record<string, string[]> = {
   'premiere 4': ['premiere 4', 'premiere4'],
   'premiere 5': ['premiere 5', 'premiere5'],
   'premiere 6': ['premiere 6', 'premiere6'],
-  cazetv: ['cazetv', 'caze tv', 'cazé tv', 'caze', 'cazé'],
+  cazetv: ['cazetv', 'caze tv', 'cazé tv', 'caze tv hd', 'cazetv hd', 'caze tv fhd', 'canal caze', 'caze', 'cazé'],
+  record: ['record tv', 'rede record', 'tv record', 'record sp', 'record rj', 'record paulista', 'record'],
   globo: ['tv globo', 'globo sp', 'globo rj', 'rede globo', 'globo minas', 'globo'],
   sbt: ['tv sbt', 'sbt sp', 'sbt rj', 'rede sbt', 'sbt'],
   band: ['tv band', 'band sp', 'rede bandeirantes', 'band'],
   bandsports: ['bandsports', 'band sports'],
   tnt: ['tnt sports', 'tnt'],
   space: ['space'],
+  max: ['hbo max', 'max hd', 'max fhd', 'max 4k', 'max'],
   'prime video': ['prime video', 'amazon prime', 'prime'],
   'paramount+': ['paramount+', 'paramount'],
   goat: ['canal goat', 'goat'],
@@ -72,7 +74,17 @@ export function findBestLiveChannel(
         score -= 250 // Ex: 'TNT Novelas'
       }
 
-      // 2. Diferenciação de canais numerados
+      // 2. Diferenciação de canais numerados e isolamento de emissoras
+      if (rawTarget !== 'record' && !rawTarget.includes('record') && (name.includes('record') || name.includes('rederecord'))) {
+        score -= 300 // Impede que Record seja puxada para canais como CazéTV, Premiere, etc.
+      }
+
+      if (rawTarget === 'cazetv') {
+        if (!name.includes('caze') && !name.includes('cazé')) {
+          score -= 500
+        }
+      }
+
       if (rawTarget === 'sportv' || rawTarget === 'sportv 1') {
         if (name.includes('sportv 2') || name.includes('spor tv 2') || name.includes('sportv 3') || name.includes('spor tv 3') || name.includes('sportv 4')) {
           score -= 90
@@ -174,7 +186,8 @@ export function findAllMatchingLiveChannels(
         { displayGroup: 'ESPN 2', searchTarget: 'espn 2' },
         { displayGroup: 'ESPN 3', searchTarget: 'espn 3' },
         { displayGroup: 'ESPN 4', searchTarget: 'espn 4' },
-        { displayGroup: 'ESPN 5', searchTarget: 'espn 5' }
+        { displayGroup: 'ESPN 5', searchTarget: 'espn 5' },
+        { displayGroup: 'ESPN 6', searchTarget: 'espn 6' }
       )
     } else if (low.includes('premiere')) {
       subTargets.push(
@@ -192,6 +205,8 @@ export function findAllMatchingLiveChannels(
       )
     } else if (low.includes('caze') || low.includes('cazé')) {
       subTargets.push({ displayGroup: 'CazéTV', searchTarget: 'cazetv' })
+    } else if (low.includes('record')) {
+      subTargets.push({ displayGroup: 'Record TV', searchTarget: 'record' })
     } else if (low.includes('globo')) {
       subTargets.push({ displayGroup: 'TV Globo', searchTarget: 'globo' })
     } else if (low.includes('sbt')) {
@@ -201,9 +216,15 @@ export function findAllMatchingLiveChannels(
     } else if (low.includes('band')) {
       subTargets.push({ displayGroup: 'Band', searchTarget: 'band' })
     } else if (low.includes('tnt')) {
-      subTargets.push({ displayGroup: 'TNT Sports', searchTarget: 'tnt' })
+      subTargets.push(
+        { displayGroup: 'TNT Sports', searchTarget: 'tnt' },
+        { displayGroup: 'Space', searchTarget: 'space' },
+        { displayGroup: 'Max', searchTarget: 'max' }
+      )
     } else if (low.includes('space')) {
       subTargets.push({ displayGroup: 'Space', searchTarget: 'space' })
+    } else if (low.includes('max') || low.includes('hbo')) {
+      subTargets.push({ displayGroup: 'Max', searchTarget: 'max' })
     } else if (low.includes('prime')) {
       subTargets.push({ displayGroup: 'Prime Video', searchTarget: 'prime video' })
     } else if (low.includes('paramount')) {

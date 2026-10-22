@@ -42,7 +42,7 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'bra.1',
     name: 'Brasileirão Série A',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/85.png',
-    tv: ['Premiere', 'SporTV', 'Globo'],
+    tv: ['Premiere', 'SporTV', 'Globo', 'Record TV', 'CazéTV'],
   },
   'bra.2': {
     slug: 'bra.2',
@@ -54,49 +54,49 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'bra.copa_do_brazil',
     name: 'Copa do Brasil',
     badge: 'https://r2.thesportsdb.com/images/media/league/badge/h38dax1582151151.png',
-    tv: ['SporTV', 'Premiere', 'Prime Video'],
+    tv: ['SporTV', 'Premiere', 'Prime Video', 'Globo'],
   },
   'conmebol.libertadores': {
     slug: 'conmebol.libertadores',
     name: 'Copa Libertadores',
     badge: 'https://r2.thesportsdb.com/images/media/league/badge/gq50361582151025.png',
-    tv: ['ESPN', 'Paramount+', 'Globo'],
+    tv: ['Globo', 'ESPN', 'Paramount+'],
   },
   'conmebol.sudamericana': {
     slug: 'conmebol.sudamericana',
     name: 'Copa Sul-Americana',
     badge: 'https://r2.thesportsdb.com/images/media/league/badge/03v2p51582151068.png',
-    tv: ['ESPN', 'Paramount+', 'SBT'],
+    tv: ['SBT', 'ESPN', 'Paramount+'],
   },
   'uefa.champions': {
     slug: 'uefa.champions',
     name: 'UEFA Champions League',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png',
-    tv: ['Max', 'TNT', 'Space'],
+    tv: ['TNT', 'Space', 'Max'],
   },
   'uefa.europa': {
     slug: 'uefa.europa',
     name: 'UEFA Europa League',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png',
-    tv: ['CazéTV', 'ESPN'],
+    tv: ['ESPN', 'CazéTV'],
   },
   'eng.1': {
     slug: 'eng.1',
     name: 'Premier League',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/23.png',
-    tv: ['ESPN', 'Disney+'],
+    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
   },
   'esp.1': {
     slug: 'esp.1',
     name: 'La Liga',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/15.png',
-    tv: ['ESPN', 'Disney+'],
+    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
   },
   'ita.1': {
     slug: 'ita.1',
     name: 'Serie A (Itália)',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/12.png',
-    tv: ['ESPN', 'Disney+'],
+    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
   },
   'ger.1': {
     slug: 'ger.1',
@@ -409,6 +409,28 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
 
   if (isCruzeiro) {
     channels = ['SporTV', 'Premiere']
+  } else if (leagueSlug === 'uefa.champions') {
+    channels = ['TNT', 'Space', 'Max']
+  } else if (leagueSlug === 'uefa.europa') {
+    // Na Europa League no Brasil, CazéTV transmite apenas 1 ou 2 jogos de grande destaque por rodada
+    const isMarqueeEuropaMatch =
+      homeLower.includes('united') || awayLower.includes('united') ||
+      homeLower.includes('roma') || awayLower.includes('roma') ||
+      homeLower.includes('tottenham') || awayLower.includes('tottenham') ||
+      homeLower.includes('milan') || awayLower.includes('milan') ||
+      homeLower.includes('porto') || awayLower.includes('porto') ||
+      homeLower.includes('ajax') || awayLower.includes('ajax') ||
+      homeLower.includes('lazio') || awayLower.includes('lazio') ||
+      homeLower.includes('lyon') || awayLower.includes('lyon') ||
+      homeLower.includes('bilbao') || awayLower.includes('bilbao') ||
+      homeLower.includes('fenerbahce') || awayLower.includes('fenerbahce') ||
+      homeLower.includes('besiktas') || awayLower.includes('besiktas')
+
+    if (isMarqueeEuropaMatch) {
+      channels = ['CazéTV', 'ESPN']
+    } else {
+      channels = ['ESPN', 'ESPN 2', 'ESPN 4']
+    }
   } else if (leagueSlug === 'conmebol.sudamericana') {
     // Na Copa Sul-Americana no Brasil, os jogos principais de TV aberta/streaming pertencem a SBT e Paramount+
     if (isVasco || homeLower.includes('corinthians') || awayLower.includes('corinthians') || homeLower.includes('fortaleza') || awayLower.includes('fortaleza') || homeLower.includes('cruzeiro') || awayLower.includes('cruzeiro')) {
@@ -417,9 +439,28 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
       channels = ['Paramount+', 'ESPN', 'SBT']
     }
   } else if (leagueSlug === 'conmebol.libertadores') {
-    channels = ['Globo', 'Paramount+', 'ESPN']
+    channels = ['Globo', 'ESPN', 'Paramount+']
   } else if (leagueSlug === 'bra.copa_do_brazil') {
     channels = ['SporTV', 'Premiere', 'Prime Video', 'Globo']
+  } else if (leagueSlug === 'bra.1') {
+    // Mandantes da LFU têm transmissão aberta/digital na Record TV e CazéTV além do Premiere
+    const isLfuHost =
+      homeLower.includes('corinthians') ||
+      homeLower.includes('cruzeiro') ||
+      homeLower.includes('vasco') ||
+      homeLower.includes('fluminense') ||
+      homeLower.includes('botafogo') ||
+      homeLower.includes('fortaleza') ||
+      homeLower.includes('internacional') ||
+      homeLower.includes('juventude') ||
+      homeLower.includes('criciuma') ||
+      homeLower.includes('atletico-go')
+
+    if (isLfuHost) {
+      channels = ['Record TV', 'CazéTV', 'Premiere']
+    } else {
+      channels = ['Premiere', 'SporTV', 'Globo']
+    }
   }
 
   const ts = event.date ? Date.parse(event.date) : Date.now()
