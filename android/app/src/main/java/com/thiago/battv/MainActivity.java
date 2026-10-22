@@ -31,4 +31,43 @@ public class MainActivity extends BridgeActivity {
             webView.setWebChromeClient(new WebChromeClient());
         }
     }
+
+    private long lastBackPressTime = 0;
+
+    @Override
+    public void onBackPressed() {
+        if (bridge != null && bridge.getWebView() != null) {
+            // Verifica se há modal ativo, diálogo ou player na tela para fechar primeiro
+            bridge.getWebView().evaluateJavascript(
+                "(function() {" +
+                "  var modal = document.querySelector('[data-tv-modal=\"true\"], [role=\"dialog\"], [data-tv-player=\"true\"]');" +
+                "  if (modal) {" +
+                "    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true }));" +
+                "    return true;" +
+                "  }" +
+                "  var evt = new CustomEvent('tvHardwareBack', { cancelable: true });" +
+                "  var dispatched = window.dispatchEvent(evt);" +
+                "  return !dispatched;" +
+                "})();",
+                new android.webkit.ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        if ("true".equals(value)) {
+                            // Modal, player ou aba manipulou a ação de voltar, não fecha o app
+                            return;
+                        }
+                        long now = System.currentTimeMillis();
+                        if (now - lastBackPressTime < 2500) {
+                            MainActivity.super.onBackPressed();
+                        } else {
+                            lastBackPressTime = now;
+                            android.widget.Toast.makeText(MainActivity.this, "Pressione Voltar novamente para sair do BAT TV", android.widget.Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            );
+        } else {
+            super.onBackPressed();
+        }
+    }
 }

@@ -47,6 +47,29 @@ export default function MobileShell() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleTvBack = (e: Event) => {
+      if (search) {
+        e.preventDefault()
+        setSearch('')
+        return
+      }
+      if (showEditProfileModal) {
+        e.preventDefault()
+        setShowEditProfileModal(false)
+        return
+      }
+      if (section !== 'home') {
+        e.preventDefault()
+        handleSelectSection('home')
+        return
+      }
+    }
+
+    window.addEventListener('tvHardwareBack', handleTvBack)
+    return () => window.removeEventListener('tvHardwareBack', handleTvBack)
+  }, [search, showEditProfileModal, section])
+
   const handleSelectSection = (s: Section | 'my-netflix') => {
     trailerCoordinator.stopAll()
     setSection(s)

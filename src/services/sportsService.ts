@@ -226,12 +226,19 @@ async function fetchEspnJson<T = Json>(url: string, ttlMs = 120_000): Promise<T>
   }
 }
 
+let memoryCachedSportsHubMatches: Match[] | null = null
+let lastSportsFetchTime = 0
+
 export function getCachedSportsHubMatches(): Match[] {
+  if (memoryCachedSportsHubMatches && memoryCachedSportsHubMatches.length > 0) {
+    return memoryCachedSportsHubMatches
+  }
   try {
     const raw = localStorage.getItem(SPORTS_HUB_MATCHES_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed.matches) && parsed.matches.length > 0 && Date.now() - parsed.savedAt < 15 * 60_000) {
+    if (Array.isArray(parsed.matches) && parsed.matches.length > 0 && Date.now() - parsed.savedAt < 30 * 60_000) {
+      memoryCachedSportsHubMatches = parsed.matches
       return parsed.matches
     }
   } catch {}
@@ -239,6 +246,8 @@ export function getCachedSportsHubMatches(): Match[] {
 }
 
 export function saveCachedSportsHubMatches(matches: Match[]): void {
+  memoryCachedSportsHubMatches = matches
+  lastSportsFetchTime = Date.now()
   try {
     if (matches && matches.length > 0) {
       localStorage.setItem(
@@ -502,71 +511,42 @@ let inFlightSportsFetch: Promise<Match[]> | null = null
  * Otimizado com cache em memória, execução paralela e timeout para carregar no Fire Stick em < 1s.
  */
 export async function getTodayMainLeaguesGames(): Promise<Match[]> {
+  // 1. Se já tivermos dados frescos na memória (< 60 segundos), retorna instantaneamente
+  if (memoryCachedSportsHubMatches && memoryCachedSportsHubMatches.length > 0 && Date.now() - lastSportsFetchTime < 60_000) {
+    return memoryCachedSportsHubMatches
+  }
+
   if (inFlightSportsFetch) return inFlightSportsFetch
 
   inFlightSportsFetch = (async () => {
     const leagueSlugs = Object.keys(MAIN_LEAGUES)
 
-    // 1. Gera as datas dos próximos 10 dias em formato YYYYMMDD
-    const now = Date.now()
-    const tenDays = now + 10 * 24 * 3600_000
-    const next10Dates: string[] = []
-    for (let i = 0; i <= 10; i++) {
-      const dt = new Date(now + i * 24 * 3600_000)
-      const y = dt.getUTCFullYear()
-      const m = String(dt.getUTCMonth() + 1).padStart(2, '0')
-      const d = String(dt.getUTCDate()).padStart(2, '0')
-      next10Dates.push(`${y}${m}${d}`)
-    }
-
-    // 2. Busca o placar de hoje e as rodadas dos próximos 10 dias de todas as ligas
+    // 2. Busca o placar da rodada atual de todas as 12 ligas em paralelo (ultra rápido, < 500ms)
     const promises = leagueSlugs.map(async (slug) => {
       try {
         const data = await fetchEspnJson<{ events?: Json[]; leagues?: Json[] }>(
           `${ESPN_BASE}/${slug}/scoreboard`,
-          45_000 // Cache de 45s para jogos ao vivo
+          60_000 // Cache de 1 min para jogos ao vivo
         )
         const events = data.events || []
         const parsed = events.map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
 
-        // Extrai todas as datas agendadas nos próximos 10 dias a partir do calendário oficial da liga
+        // Se a liga tiver calendário e o scoreboard atual não tiver jogos nos próximos dias,
+        // busca no máximo a próxima data relevante (1 única query futura por liga, sem sobrecarregar a TV)
         const calendar = data.leagues?.[0]?.calendar || []
-        const targetDates = new Set<string>()
-
-        if (Array.isArray(calendar)) {
-          for (const item of calendar) {
-            if (typeof item === 'string') {
-              const dt = new Date(item).getTime()
-              if (dt >= now - 12 * 3600_000 && dt <= tenDays) {
-                targetDates.add(item.slice(0, 10).replace(/-/g, ''))
-              }
-            }
-          }
-        }
-
-        // Para torneios eliminatórios (Libertadores, Sul-Americana, Copa do Brasil) ou ligas sem array puro de strings
-        if (targetDates.size === 0 || slug.includes('libertadores') || slug.includes('sudamericana') || slug.includes('copa')) {
-          // Busca os próximos 7 dias úteis de jogos
-          next10Dates.slice(1, 8).forEach((dStr) => targetDates.add(dStr))
-        }
-
-        // Dispara as consultas de datas em paralelo
-        if (targetDates.size > 0) {
-          const datePromises = Array.from(targetDates).map(async (dStr) => {
+        if (parsed.length <= 2 && Array.isArray(calendar) && calendar.length > 0) {
+          const now = Date.now()
+          const nextDateItem = calendar.find((c) => typeof c === 'string' && new Date(c).getTime() > now)
+          if (typeof nextDateItem === 'string') {
+            const dStr = nextDateItem.slice(0, 10).replace(/-/g, '')
             try {
-              const dateData = await fetchEspnJson<{ events?: Json[] }>(
+              const futureData = await fetchEspnJson<{ events?: Json[] }>(
                 `${ESPN_BASE}/${slug}/scoreboard?dates=${dStr}`,
-                180_000 // Cache de 3 minutos para datas futuras
+                180_000
               )
-              return (dateData.events || []).map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
-            } catch {
-              return [] as Match[]
-            }
-          })
-
-          const dateResults = await Promise.all(datePromises)
-          for (const list of dateResults) {
-            parsed.push(...list)
+              const futureParsed = (futureData.events || []).map((e) => parseEspnEvent(e, slug)).filter(Boolean) as Match[]
+              parsed.push(...futureParsed)
+            } catch {}
           }
         }
 
@@ -588,7 +568,7 @@ export async function getTodayMainLeaguesGames(): Promise<Match[]> {
     if (deduped.length > 0) {
       saveCachedSportsHubMatches(deduped)
     }
-    return deduped
+    return deduped.length > 0 ? deduped : (memoryCachedSportsHubMatches || [])
   })().finally(() => {
     inFlightSportsFetch = null
   })

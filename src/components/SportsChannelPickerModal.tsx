@@ -31,7 +31,16 @@ export default function SportsChannelPickerModal({
   // Gerenciamento de teclado (TV D-pad, Escape para fechar, setas cima/baixo)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === 'Back' || e.key === 'BrowserBack') {
+      const isBackKey =
+        e.key === 'Escape' ||
+        e.key === 'Back' ||
+        e.key === 'BrowserBack' ||
+        e.key === 'GoBack' ||
+        e.keyCode === 27 ||
+        e.keyCode === 4 ||
+        e.keyCode === 10009
+
+      if (isBackKey) {
         e.preventDefault()
         e.stopPropagation()
         onClose()
@@ -66,6 +75,7 @@ export default function SportsChannelPickerModal({
   return (
     <div
       role="dialog"
+      data-tv-modal="true"
       aria-modal="true"
       aria-labelledby="channel-picker-title"
       onClick={onClose}

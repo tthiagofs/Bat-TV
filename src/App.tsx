@@ -93,6 +93,30 @@ function Shell() {
     },
   })
 
+  // Trata o botão Voltar do controle remoto de TVs (Fire TV, Android TV)
+  useEffect(() => {
+    const handleTvBack = (e: Event) => {
+      if (search) {
+        e.preventDefault()
+        setSearch('')
+        return
+      }
+      if (showEditProfileModal) {
+        e.preventDefault()
+        setShowEditProfileModal(false)
+        return
+      }
+      if (section !== 'home') {
+        e.preventDefault()
+        handleSelectSection('home')
+        return
+      }
+    }
+
+    window.addEventListener('tvHardwareBack', handleTvBack)
+    return () => window.removeEventListener('tvHardwareBack', handleTvBack)
+  }, [search, showEditProfileModal, section])
+
   const query = useDeferredValue(search)
 
   // 1. Se estiver offline, prioriza abrir direto a tela de downloads no Mobile ou Desktop
