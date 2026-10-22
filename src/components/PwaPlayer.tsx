@@ -775,11 +775,11 @@ export default function PwaPlayer({
       return
     }
 
-    // 2. Se o usuário estiver no celular com a tela em pé (isPortrait):
-    // Como a trava de orientação vertical do iOS pode estar ligada, o QuickTime do iOS
-    // forçaria o vídeo para vertical se chamado. Por isso, mantemos a rotação horizontal
-    // inteligente em 90 graus e alternamos para preenchimento total (simula tela cheia)!
-    if (isMobileDevice && isPortrait) {
+    // 2. No celular (iPhone / Android) em tela cheia:
+    // O reprodutor nativo QuickTime da Apple (v.webkitEnterFullscreen) ignora o modo 'Preencher'
+    // e adiciona bordas pretas nos 4 cantos da tela.
+    // Como o app já ocupa 100% da tela física, alternamos entre 'Ajustar' e 'Preencher' (tela cheia real):
+    if (isMobileDevice) {
       if (c && typeof c.requestFullscreen === 'function') {
         c.requestFullscreen()
           .then(() => {
@@ -794,38 +794,20 @@ export default function PwaPlayer({
         return
       }
 
-      // No Safari do iPhone: alterna proporção para preenchimento total e fecha controles
-      setForceLandscape(true)
+      if (isPortrait) {
+        setForceLandscape(true)
+      }
       setAspect((prev) => (prev === 'contain' ? 'cover' : 'contain'))
       setShowControls(false)
       return
     }
 
-    // 3. Se o aparelho já estiver fisicamente na horizontal (landscape, isPortrait = false) ou Desktop:
+    // 3. Desktop / TV:
     if (c && typeof c.requestFullscreen === 'function') {
       c.requestFullscreen()
         .then(() => setFullscreen(true))
-        .catch(() => {
-          if (v && typeof v.webkitEnterFullscreen === 'function') {
-            v.webkitEnterFullscreen()
-            setFullscreen(true)
-          }
-        })
+        .catch(() => {})
       return
-    }
-
-    if (c && typeof c.webkitRequestFullscreen === 'function') {
-      c.webkitRequestFullscreen()
-      setFullscreen(true)
-      return
-    }
-
-    if (v && typeof v.webkitEnterFullscreen === 'function') {
-      try {
-        v.webkitEnterFullscreen()
-        setFullscreen(true)
-        return
-      } catch {}
     }
 
     if (c && typeof c.webkitRequestFullscreen === 'function') {
@@ -2081,10 +2063,11 @@ export default function PwaPlayer({
                 NativePlayer.setResizeMode({ mode: next }).catch(() => {})
               }
             }}
-            className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm hover:bg-white/15 focus:bg-white/25 focus:ring-2 focus:ring-rose-500 focus:outline-none transition cursor-pointer shrink-0"
-            title="Proporção (A)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white/10 hover:bg-white/20 focus:bg-white/25 focus:ring-2 focus:ring-rose-500 focus:outline-none transition cursor-pointer shrink-0 text-zinc-200 hover:text-white"
+            title="Proporção: Ajustar ou Preencher"
           >
-            <RectangleHorizontal size={16} /> <span className="hidden sm:inline">{aspect === 'contain' ? '16:9' : 'Preencher'}</span>
+            <RectangleHorizontal size={15} className="text-rose-400" />
+            <span className="text-[11px] sm:text-xs font-semibold">{aspect === 'contain' ? 'Ajustar' : 'Preencher'}</span>
           </button>
           <button id="player-fullscreen" tabIndex={0} onClick={toggleFullscreen} className={btn} aria-label="Tela cheia (F)" title="Tela cheia (F)">
             {fullscreen ? <Minimize size={20} className="sm:w-[22px] sm:h-[22px]" /> : <Maximize size={20} className="sm:w-[22px] sm:h-[22px]" />}
