@@ -1,7 +1,7 @@
 {
   "name": "bat-tv",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "BAT TV - O Melhor do Streaming e TV Ao Vivo",
   "author": "Thiago Felipe",
   "main": "electron/main.cjs",
