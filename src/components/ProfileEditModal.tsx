@@ -5,6 +5,13 @@ import type { Profile } from '../services/profileDb'
 import { Avatar } from '../data/avatars'
 import { clubByKey } from '../data/teams'
 import { getCustomProxy, setCustomProxy } from '../services/proxyConfig'
+import {
+  getTvPerformanceSetting,
+  setTvPerformanceSetting,
+  isTvPerformanceActive,
+  isHardwareTvDetected,
+  type TvPerformanceSetting,
+} from '../services/tvModeService'
 import AvatarPickerModal from './AvatarPickerModal'
 import TeamSelectorModal from './TeamSelectorModal'
 import GenrePreferencesModal from './GenrePreferencesModal'
@@ -25,20 +32,15 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [showTeamSelector, setShowTeamSelector] = useState(false)
   const [showGenreSelector, setShowGenreSelector] = useState(false)
-  const [isLiteMode, setIsLiteMode] = useState(() => profile.liteMode ?? (localStorage.getItem('iptv-rea:lite') === '1'))
+  const [tvPerfSetting, setTvPerfSetting] = useState<TvPerformanceSetting>(() => getTvPerformanceSetting())
+  const [isTvActive, setIsTvActive] = useState(() => isTvPerformanceActive())
   const [customProxy, setCustomProxyInput] = useState(() => getCustomProxy())
   const [msg, setMsg] = useState('')
 
-  const toggleLiteMode = () => {
-    const next = !isLiteMode
-    setIsLiteMode(next)
-    if (next) {
-      document.documentElement.classList.add('lite')
-      localStorage.setItem('iptv-rea:lite', '1')
-    } else {
-      document.documentElement.classList.remove('lite')
-      localStorage.setItem('iptv-rea:lite', '0')
-    }
+  const handleTvSettingChange = (setting: TvPerformanceSetting) => {
+    setTvPerfSetting(setting)
+    setTvPerformanceSetting(setting)
+    setIsTvActive(isTvPerformanceActive())
   }
 
   const handleSave = async () => {
@@ -47,7 +49,7 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
       avatar,
       teamKey: teamKey ?? null,
       preferredGenres,
-      liteMode: isLiteMode,
+      liteMode: isTvActive,
     })
     setCustomProxy(customProxy)
     if (pin.length === 4) {
@@ -187,36 +189,81 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
               </button>
             </div>
 
-            {/* Versão Lite (Desempenho Fire Stick e PC) */}
-            <div className="p-4 rounded-2xl bg-zinc-950/40 border border-zinc-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl border transition ${isLiteMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
-                  <Zap size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-                    <span>Versão Lite</span>
-                    <span className="text-[10px] uppercase font-extrabold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                      {isLiteMode ? 'Ativada' : 'Desativada'}
-                    </span>
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    Desativa reprodução automática de trailers e desfoques pesados para máxima fluidez
-                  </p>
+            {/* Modo TV & Ultra Fluidez (Fire Stick, TV TCL e Tablet) */}
+            <div className="p-4 rounded-2xl bg-zinc-950/40 border border-zinc-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2.5 rounded-xl border transition ${isTvActive ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
+                    <Zap size={20} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+                      <span>Modo TV & Ultra Fluidez</span>
+                      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
+                        isTvActive
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                      }`}>
+                        {isTvActive ? '⚡ 60 FPS Ativo' : '✨ Visual Completo'}
+                      </span>
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Remove blurs e sombras pesadas para resposta instantânea do controle remoto na TV.
+                    </p>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                tabIndex={0}
-                onClick={toggleLiteMode}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition focus:ring-4 focus:ring-amber-400 focus:outline-none cursor-pointer ${
-                  isLiteMode
-                    ? 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-md shadow-amber-500/20'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
-                }`}
-              >
-                {isLiteMode ? 'Ligada' : 'Desligada'}
-              </button>
+
+              {/* Seletor Triplo: Automático / Forçar Ativado / Forçar Desativado */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <button
+                  type="button"
+                  tabIndex={0}
+                  onClick={() => handleTvSettingChange('auto')}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer ${
+                    tvPerfSetting === 'auto'
+                      ? 'bg-rose-600 text-white shadow-md shadow-rose-950/50 border border-rose-500'
+                      : 'bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  <span>Automático</span>
+                  <span className="text-[9px] font-normal opacity-80">(TVs Sim / Tablet Não)</span>
+                </button>
+
+                <button
+                  type="button"
+                  tabIndex={0}
+                  onClick={() => handleTvSettingChange('on')}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer ${
+                    tvPerfSetting === 'on'
+                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/30 border border-amber-400'
+                      : 'bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  <span>Forçar Ativado</span>
+                  <span className="text-[9px] font-normal opacity-80">(Máxima Rapidez)</span>
+                </button>
+
+                <button
+                  type="button"
+                  tabIndex={0}
+                  onClick={() => handleTvSettingChange('off')}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center gap-1 focus:ring-4 focus:ring-rose-500 focus:outline-none cursor-pointer ${
+                    tvPerfSetting === 'off'
+                      ? 'bg-white text-zinc-950 shadow-md border border-white'
+                      : 'bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  <span>Desativado</span>
+                  <span className="text-[9px] font-normal opacity-80">(Todos Efeitos)</span>
+                </button>
+              </div>
+
+              <p className="text-[11px] text-zinc-500 italic px-1">
+                {isHardwareTvDetected()
+                  ? 'Dispositivo de TV detectado: Modo Ultra Fluidez recomendado para seu controle.'
+                  : 'Tablet/PC detectado: O modo Automático mantém os efeitos visuais completos sem perda de performance.'}
+              </p>
             </div>
 
             {/* PIN de Segurança */}

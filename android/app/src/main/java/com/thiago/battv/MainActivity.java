@@ -1,7 +1,11 @@
 package com.thiago.battv;
 
+import android.app.UiModeManager;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
@@ -16,10 +20,24 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativePlayerPlugin.class);
         super.onCreate(savedInstanceState);
 
+        // Força aceleração por hardware na janela
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        );
+
         // Configura a janela para suportar transparência sobre a Surface de vídeo nativa
         getWindow().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
         getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Detecta se o dispositivo é uma TV (Android TV, Fire Stick, TCL, etc.) vs Tablet/Celular
+        UiModeManager uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+        boolean isTelevision = uiModeManager != null && uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
+        boolean hasLeanback = getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+        boolean isFireTV = Build.MODEL != null && (Build.MODEL.startsWith("AFT") || (Build.MANUFACTURER != null && Build.MANUFACTURER.equalsIgnoreCase("Amazon")));
+        boolean isTclTV = (Build.MODEL != null && Build.MODEL.toUpperCase().contains("TCL")) || (Build.MANUFACTURER != null && Build.MANUFACTURER.toUpperCase().contains("TCL"));
+        final boolean isTvDevice = isTelevision || hasLeanback || isFireTV || isTclTV;
 
         if (bridge != null && bridge.getWebView() != null) {
             WebView webView = bridge.getWebView();
@@ -28,7 +46,23 @@ public class MainActivity extends BridgeActivity {
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            settings.setDomStorageEnabled(true);
+            settings.setDatabaseEnabled(true);
             webView.setWebChromeClient(new WebChromeClient());
+
+            // Informa a web view se é um dispositivo de TV para ligar o modo de ultra desempenho
+            webView.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (bridge != null && bridge.getWebView() != null) {
+                        bridge.getWebView().evaluateJavascript(
+                            "window.__IS_ANDROID_TV__ = " + isTvDevice + "; " +
+                            "if (window.__applyTvPerformanceMode) { window.__applyTvPerformanceMode(" + isTvDevice + "); }",
+                            null
+                        );
+                    }
+                }
+            });
         }
     }
 

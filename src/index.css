@@ -70,15 +70,62 @@ body.native-player-active #root > *:not([data-tv-player="true"]):not(#app-shell-
 .shake { animation: shake .3s ease; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Modo Leve (padrão): remove blur de fundo (muito pesado em GPUs fracas/Fire Stick),
-   mantém o visual com fundos translúcidos. Para desligar: remova a classe "lite" do <html>. */
+/* Modo Leve & Modo TV Ultra Fluidez (Fire Stick & TV TCL):
+   Remove blur de fundo, sombras pesadas e animações contínuas,
+   garantindo 60 FPS cravados e resposta imediata do controle remoto. */
 html.lite *,
 html.lite *::before,
-html.lite *::after {
+html.lite *::after,
+html.tv-perf-mode *,
+html.tv-perf-mode *::before,
+html.tv-perf-mode *::after {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-html.lite .fade-up { animation-duration: .2s; }
+
+html.tv-perf-mode {
+  /* Força renderização acelerada por GPU */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Modais, cabeçalhos e painéis recebem fundo sólido e limpo no modo TV */
+html.tv-perf-mode [role="dialog"],
+html.tv-perf-mode [data-tv-modal="true"],
+html.tv-perf-mode .bg-zinc-950\/80,
+html.tv-perf-mode .bg-zinc-900\/90,
+html.tv-perf-mode .bg-black\/80,
+html.tv-perf-mode .bg-black\/60 {
+  background-color: #0c0c0e !important;
+}
+
+html.tv-perf-mode header,
+html.tv-perf-mode nav {
+  background-color: #09090b !important;
+}
+
+/* Desativa sombras pesadas de GPU no Fire Stick */
+html.tv-perf-mode * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Animações e transições ultra rápidas para resposta do controle remoto */
+html.tv-perf-mode .fade-up {
+  animation-duration: 0.1s !important;
+}
+
+html.tv-perf-mode .animate-pulse {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* Foco rápido e visível do controle remoto da TV */
+html.tv-perf-mode button,
+html.tv-perf-mode a,
+html.tv-perf-mode [tabindex="0"] {
+  transition-duration: 80ms !important;
+}
 
 /* Estilo global de Foco do Controle Remoto (D-Pad TV & Teclado) */
 :focus-visible {
@@ -88,7 +135,8 @@ button:focus-visible,
 a:focus-visible,
 [tabindex="0"]:focus-visible,
 input:focus-visible {
-  outline: 2px solid #f43f5e !important;
+  outline: 3px solid #f43f5e !important;
   outline-offset: 2px !important;
 }
+
 
