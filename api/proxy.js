@@ -109,6 +109,10 @@ export default function handler(req, res) {
               manifestText += chunk.toString('utf-8')
             })
             proxyRes.on('end', () => {
+              const host = req.headers['x-forwarded-host'] || req.headers.host
+              const proto = req.headers['x-forwarded-proto'] || 'https'
+              const origin = host ? `${proto}://${host}` : ''
+
               const rewritten = manifestText
                 .split('\n')
                 .map((line) => {
@@ -120,7 +124,7 @@ export default function handler(req, res) {
                     l = l.replace(/URI=["']?([^"',>\s]+)["']?/g, (_, uri) => {
                       try {
                         const absUrl = new URL(uri, targetUrl).toString()
-                        return `URI="/api/proxy?url=${encodeURIComponent(absUrl)}"`
+                        return `URI="${origin}/api/proxy?url=${encodeURIComponent(absUrl)}"`
                       } catch {
                         return `URI="${uri}"`
                       }
@@ -134,15 +138,17 @@ export default function handler(req, res) {
                   // 3. Linhas de segmentos (.ts) ou sub-playlists (.m3u8)
                   try {
                     const absUrl = new URL(l, targetUrl).toString()
-                    return `/api/proxy?url=${encodeURIComponent(absUrl)}`
+                    return `${origin}/api/proxy?url=${encodeURIComponent(absUrl)}`
                   } catch {
                     return line
                   }
                 })
                 .join('\n')
 
-              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
-              res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+              res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8')
+              res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0')
+              res.setHeader('Pragma', 'no-cache')
+              res.setHeader('Expires', '0')
               res.setHeader('Content-Length', Buffer.byteLength(rewritten, 'utf-8'))
               res.end(rewritten)
             })

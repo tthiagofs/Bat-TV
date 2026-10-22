@@ -53,23 +53,23 @@ type Aspect = 'contain' | 'cover'
 function buildHlsConfig(isLive: boolean): Partial<Hls['config']> {
   if (isLive) {
     return {
-      lowLatencyMode: true,
-      maxBufferLength: 16,
-      maxMaxBufferLength: 24,
-      maxBufferSize: 30 * 1000 * 1000,
-      backBufferLength: 6,
-      liveSyncDurationCount: 4,
-      liveMaxLatencyDurationCount: 7,
-      maxLiveSyncPlaybackRate: 1.05,
+      lowLatencyMode: false,
+      maxBufferLength: 20,
+      maxMaxBufferLength: 35,
+      maxBufferSize: 40 * 1000 * 1000,
+      backBufferLength: 10,
+      liveSyncDuration: 8, // Margem de segurança estável de ~8 segundos contra congelamento
+      liveMaxLatencyDuration: 25,
+      maxLiveSyncPlaybackRate: 1, // Fixo em 1.0x! Nunca acelera nem distorce o fluxo
       enableWorker: true,
-      manifestLoadingTimeOut: 10000,
-      manifestLoadingMaxRetry: 3,
-      levelLoadingTimeOut: 10000,
-      levelLoadingMaxRetry: 3,
-      fragLoadingTimeOut: 15000,
-      fragLoadingMaxRetry: 4,
-      fragLoadingRetryDelay: 500,
-      fragLoadingMaxRetryTimeout: 10000,
+      manifestLoadingTimeOut: 15000,
+      manifestLoadingMaxRetry: 5,
+      levelLoadingTimeOut: 15000,
+      levelLoadingMaxRetry: 5,
+      fragLoadingTimeOut: 20000,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 1000,
+      fragLoadingMaxRetryTimeout: 20000,
     }
   }
   return {
@@ -183,9 +183,58 @@ export default function Player({
         setBuffering(false)
         setNeedsUserGesture(true)
       }
-    }, 9000)
+    }, 2000)
     return () => clearTimeout(watchdogTimer)
   }, [buffering, error, isNative, playing])
+
+  // Watchdog ativo contra congelamento de imagem no mobile/web (live stream freeze recovery)
+  useEffect(() => {
+    if (!isLive || isNative || error) return
+    let lastTime = -1
+    let frozenChecks = 0
+
+    const interval = setInterval(() => {
+      const v = videoRef.current
+      if (!v || v.paused || v.ended) return
+
+      // Se o player está tocando mas o tempo do vídeo congelou no mesmo segundo
+      if (Math.abs(v.currentTime - lastTime) < 0.25) {
+        frozenChecks++
+        // Se a imagem permanecer congelada por ~3.6 segundos (3 checagens consecutivas)
+        if (frozenChecks >= 3) {
+          console.warn('Congelamento detectado no canal ao vivo! Executando recuperação automática...')
+          frozenChecks = 0
+
+          // 1. Se estiver rodando com Hls.js, tenta recuperação de buffer/mídia
+          if (hlsRef.current) {
+            try {
+              hlsRef.current.recoverMediaError()
+            } catch {}
+          }
+
+          // 2. Nudge para a borda ao vivo mais recente (seekable end)
+          try {
+            if (v.seekable && v.seekable.length > 0) {
+              const liveEdge = v.seekable.end(v.seekable.length - 1)
+              if (liveEdge > v.currentTime + 0.8) {
+                v.currentTime = Math.max(0, liveEdge - 1)
+                v.play().catch(() => {})
+                return
+              }
+            }
+          } catch {}
+
+          // 3. Se persistir congelado, reconecta o stream suavemente sem sair da tela
+          setRetryKey((k) => k + 1)
+        }
+      } else {
+        lastTime = v.currentTime
+        frozenChecks = 0
+      }
+    }, 1200)
+
+    return () => clearInterval(interval)
+  }, [isLive, isNative, error])
 
   const toggleVodFormat = useCallback(() => {
     setError('')
@@ -292,13 +341,22 @@ export default function Player({
       setNeedsUnmute(false)
     }
 
-    // Se estava aguardando toque para iniciar, toca imediatamente
-    if (needsUserGesture && videoRef.current) {
-      videoRef.current.play().then(() => {
+    // Se estava aguardando toque ou se o vídeo estiver pausado/travado, toca imediatamente
+    const v = videoRef.current
+    if (v && (needsUserGesture || (v.paused && !playing))) {
+      v.play().then(() => {
         setNeedsUserGesture(false)
         setPlaying(true)
         setBuffering(false)
-      }).catch(() => {})
+      }).catch(() => {
+        v.muted = true
+        v.play().then(() => {
+          setNeedsUserGesture(false)
+          setPlaying(true)
+          setBuffering(false)
+          setNeedsUnmute(true)
+        }).catch(() => {})
+      })
     }
 
     window.clearTimeout(hideTimer.current)
@@ -509,6 +567,9 @@ export default function Player({
 
     const video = videoRef.current
     if (!video) return
+    try {
+      video.disableRemotePlayback = true
+    } catch {}
     setError('')
     setBuffering(true)
     setNeedsUserGesture(false)
@@ -617,36 +678,53 @@ export default function Player({
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           networkRetryCount++
-          if (networkRetryCount <= 1) {
+          if (networkRetryCount <= 2) {
             setTimeout(() => hls?.startLoad(), 1000)
           } else {
-            console.warn('HLS Network Error (CORS ou servidor). Tentando reprodução direta nativa...')
-            hls?.destroy()
-            hlsRef.current = null
-            if (video) {
-              video.src = streamUrl
-              video.load()
-              tryStartPlayback(video)
-            }
+            console.warn('HLS Network Error persistente. Tentando reconectar stream...')
+            networkRetryCount = 0
+            setTimeout(() => setRetryKey((k) => k + 1), 1500)
           }
         } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          console.warn('HLS Media Error detectado, recuperando codec/buffer...')
           hls?.recoverMediaError()
         } else {
-          console.warn('HLS erro fatal. Tentando reprodução direta via tag video...')
+          console.warn('HLS erro fatal não recuperável.')
           hls?.destroy()
           hlsRef.current = null
-          if (video) {
+          if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
+            console.warn('Tentando fallback para player nativo da Apple...')
             video.src = streamUrl
+            video.preload = 'auto'
             video.load()
             tryStartPlayback(video)
+            return
           }
+          setTimeout(() => setRetryKey((k) => k + 1), 1200)
         }
       })
     } else {
       video.src = streamUrl
       video.preload = 'auto'
       video.load()
-      tryStartPlayback(video)
+
+      const onCanPlay = () => {
+        video.removeEventListener('loadedmetadata', onCanPlay)
+        video.removeEventListener('canplay', onCanPlay)
+        tryStartPlayback(video)
+      }
+
+      if (video.readyState >= 2) {
+        tryStartPlayback(video)
+      } else {
+        video.addEventListener('loadedmetadata', onCanPlay, { once: true })
+        video.addEventListener('canplay', onCanPlay, { once: true })
+        setTimeout(() => {
+          if (video && video.paused && !playing) {
+            tryStartPlayback(video)
+          }
+        }, 1200)
+      }
     }
     return () => {
       hls?.destroy()
@@ -1401,10 +1479,12 @@ export default function Player({
           playsInline
           muted={muted}
           preload="auto"
+          disableRemotePlayback
           {...{
             'webkit-playsinline': 'true',
             'x5-playsinline': 'true',
             'x5-video-player-type': 'h5-page',
+            'x-webkit-airplay': 'deny',
           }}
           onPlay={() => {
             setPlaying(true)
