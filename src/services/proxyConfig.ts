@@ -44,8 +44,9 @@ export function getProxyEndpoint(): string {
 
 export function buildProxyUrl(rawUrl: string): string {
   if (!rawUrl) return ''
+  const normalized = rawUrl.trim().replace(/^https?:/i, (m) => m.toLowerCase())
   const endpoint = getProxyEndpoint()
-  const path = `${endpoint}?url=${encodeURIComponent(rawUrl)}`
+  const path = `${endpoint}?url=${encodeURIComponent(normalized)}`
   if (typeof window !== 'undefined' && path.startsWith('/') && window.location.origin) {
     return `${window.location.origin}${path}`
   }

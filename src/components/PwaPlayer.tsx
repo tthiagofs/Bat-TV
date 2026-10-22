@@ -595,8 +595,8 @@ export default function PwaPlayer({
 
     // No Electron (PC Desktop) e no Capacitor (Android APK), a conexão de vídeo vai DIRETO ao servidor de IPTV.
     // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
-    let streamUrl = rawUrl
-    if (!Capacitor.isNativePlatform() && !isElectronEnv && (streamUrl.startsWith('http://') || streamUrl.startsWith('https://'))) {
+    let streamUrl = rawUrl.trim().replace(/^https?:/i, (m) => m.toLowerCase())
+    if (!Capacitor.isNativePlatform() && !isElectronEnv && /^https?:\/\//i.test(streamUrl)) {
       streamUrl = buildProxyUrl(streamUrl)
     }
     streamUrlRef.current = streamUrl

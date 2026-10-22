@@ -89,6 +89,7 @@ function b64(s: string | undefined): string {
 
 export function normalizeServer(url: string): string {
   let u = url.trim().replace(/\/+$/, '')
+  u = u.replace(/^https?:/i, (m) => m.toLowerCase())
   if (!/^https?:\/\//i.test(u)) u = 'http://' + u
   return u
 }
