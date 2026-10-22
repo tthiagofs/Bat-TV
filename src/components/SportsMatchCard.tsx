@@ -131,7 +131,7 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
       const liveList = await getItems(service, 'live', 'all')
       const targets = match.channels && match.channels.length > 0 ? match.channels : [channel, 'SporTV']
       const matched = findAllMatchingLiveChannels(liveList, targets)
-      if (matched.length > 1) {
+      if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
         setPickerData({
           match,
           options: matched,
@@ -139,9 +139,15 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
         })
         return
       }
-      const found = matched[0]?.channel || findBestLiveChannel(liveList, targets)
+      if (matched.length === 1) {
+        play(matched[0].channel, { playlist: liveList })
+        return
+      }
+      const found = findBestLiveChannel(liveList, targets)
       if (found) {
         play(found, { playlist: liveList })
+      } else {
+        alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
     } catch {
       // Ignora erro

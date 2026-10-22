@@ -800,14 +800,36 @@ export default function PwaPlayer({
       return
     }
 
-    // 3. Se o aparelho já estiver fisicamente na horizontal (rotação liberada) ou Desktop:
+    // 3. Dispositivos Apple iOS (iPhone / iPad no Safari e PWA):
+    // No iOS, requestFullscreen() em DIV não é suportado e rejeita assincronamente.
+    // O QuickTime do iOS EXIGE que webkitEnterFullscreen() seja chamado de forma SÍNCRONA
+    // diretamente dentro do clique do usuário para entrar em tela cheia na horizontal!
+    const isIOSDevice =
+      typeof navigator !== 'undefined' &&
+      (/iPhone|iPod/i.test(navigator.userAgent) ||
+        (/iPad/i.test(navigator.userAgent) && !document.fullscreenEnabled))
+
+    if (isIOSDevice && v && typeof v.webkitEnterFullscreen === 'function') {
+      try {
+        v.webkitEnterFullscreen()
+        setFullscreen(true)
+        setShowControls(false)
+        return
+      } catch (err) {
+        console.warn('Erro ao abrir webkitEnterFullscreen síncrono no iOS:', err)
+      }
+    }
+
+    // 4. Se o aparelho for Desktop, Android, Smart TV ou Mac:
     if (c && typeof c.requestFullscreen === 'function') {
       c.requestFullscreen()
         .then(() => setFullscreen(true))
         .catch(() => {
           if (v && typeof v.webkitEnterFullscreen === 'function') {
-            v.webkitEnterFullscreen()
-            setFullscreen(true)
+            try {
+              v.webkitEnterFullscreen()
+              setFullscreen(true)
+            } catch {}
           }
         })
       return
@@ -819,18 +841,15 @@ export default function PwaPlayer({
       return
     }
 
-    // Tela cheia ORIGINAL do iPhone (QuickTime nativo da Apple):
     if (v && typeof v.webkitEnterFullscreen === 'function') {
       try {
         v.webkitEnterFullscreen()
         setFullscreen(true)
         return
       } catch (err) {
-        console.warn('Erro ao abrir tela cheia nativa no Safari:', err)
+        console.warn('Erro ao abrir tela cheia nativa:', err)
       }
     }
-
-
 
     setForceLandscape((prev) => !prev)
   }, [isMobileDevice, isPortrait])

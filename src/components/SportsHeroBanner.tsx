@@ -111,7 +111,7 @@ function SportsHeroBannerBase({ matches }: Props) {
       const targets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
       const matched = findAllMatchingLiveChannels(liveList, targets)
 
-      if (matched.length > 1) {
+      if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
         setPickerData({
           match: current,
           options: matched,
@@ -120,8 +120,17 @@ function SportsHeroBannerBase({ matches }: Props) {
         return
       }
 
-      const found = matched[0]?.channel || findBestLiveChannel(liveList, targets)
-      if (found) play(found, { playlist: liveList })
+      if (matched.length === 1) {
+        play(matched[0].channel, { playlist: liveList })
+        return
+      }
+
+      const found = findBestLiveChannel(liveList, targets)
+      if (found) {
+        play(found, { playlist: liveList })
+      } else {
+        alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
+      }
     } catch {
       // ignore
     }
