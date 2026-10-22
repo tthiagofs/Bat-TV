@@ -30,15 +30,41 @@ function Shell() {
   const { active: activeProfile } = useProfiles()
   const isMobile = useIsMobile(768)
 
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
-  const [section, setSection] = useState<Section>(isOffline ? 'downloads' : 'home')
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
+  const [section, setSection] = useState<Section>(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return 'downloads'
+    return 'home'
+  })
   const [search, setSearch] = useState('')
   const [showEditProfileModal, setShowEditProfileModal] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
 
   const [visitedSections, setVisitedSections] = useState<Set<Section>>(
-    () => new Set([isOffline ? 'downloads' : 'home'])
+    () => new Set([typeof navigator !== 'undefined' && !navigator.onLine ? 'downloads' : 'home'])
   )
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setIsOffline(true)
+      setSection('downloads')
+    }
+    const handleOnline = () => {
+      setIsOffline(false)
+    }
+
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsOffline(true)
+      setSection('downloads')
+    }
+
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [])
 
   const handleSelectSection = (s: Section) => {
     trailerCoordinator.stopAll()
@@ -69,27 +95,25 @@ function Shell() {
 
   const query = useDeferredValue(search)
 
-  // 1. Se nenhuma lista Xtream estiver conectada, mostra Gerenciador de Listas
-  if (!activeServer || managerOpen) {
-    if (isOffline) {
-      return (
-        <div className="h-full w-full flex flex-col bg-zinc-950 overflow-hidden text-zinc-100">
-          <Downloads />
-        </div>
-      )
+  // 1. Se estiver offline, prioriza abrir direto a tela de downloads no Mobile ou Desktop
+  if (isOffline) {
+    if (isMobile) {
+      return <MobileShell />
     }
+    return (
+      <div className="h-full w-full flex flex-col bg-zinc-950 overflow-hidden text-zinc-100">
+        <Downloads />
+      </div>
+    )
+  }
+
+  // 2. Se nenhuma lista Xtream estiver conectada, mostra Gerenciador de Listas
+  if (!activeServer || managerOpen) {
     return <Login />
   }
 
-  // 2. Se nenhum perfil foi selecionado para a sessão, mostra a tela "Quem está assistindo?"
+  // 3. Se nenhum perfil foi selecionado para a sessão, mostra a tela "Quem está assistindo?"
   if (!activeProfile) {
-    if (isOffline) {
-      return (
-        <div className="h-full w-full flex flex-col bg-zinc-950 overflow-hidden text-zinc-100">
-          <Downloads />
-        </div>
-      )
-    }
     return <ProfilesScreen />
   }
 

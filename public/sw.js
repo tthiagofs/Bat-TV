@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bat-tv-pwa-v6'
+const CACHE_NAME = 'bat-tv-pwa-v7'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -12,8 +12,8 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch(() => {
-        // Ignora falha de algum recurso pontual
+      return cache.addAll(STATIC_ASSETS).catch((err) => {
+        console.warn('Falha pontual ao pré-cachear ativos estáticos:', err)
       })
     }).then(() => self.skipWaiting())
   )
@@ -38,17 +38,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
-  // Dispositivos Apple (iOS / iPadOS): NUNCA intercepta qualquer requisição de streaming ou proxy!
-  // Permite conexões 100% nativas com mediaserverd do iOS sem deadlocks
-  try {
-    const isApple = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1)
-    if (isApple && !url.pathname.startsWith('/offline-media/')) {
-      return
-    }
-  } catch {}
-
-  // 1. Atende requisições de vídeos offline baixados (/offline-media/...) com suporte a Range (iOS Safari)
+  // 1. Atende requisições de vídeos offline baixados (/offline-media/...) com suporte a HTTP 206 Range (iOS Safari)
   if (url.pathname.startsWith('/offline-media/')) {
     event.respondWith(
       caches.open('bat-tv-media-cache').then(async (cache) => {
@@ -64,13 +54,11 @@ self.addEventListener('fetch', (event) => {
 
         // Suporte a HTTP 206 Partial Content para iOS Safari conseguir dar seek e reproduzir offline
         try {
-          // Mantém blob em memória cache para não reler do disco a cada chunk solicitado
           if (!self._videoBlobCache) self._videoBlobCache = new Map()
           let blob = self._videoBlobCache.get(event.request.url)
           if (!blob) {
             blob = await cachedRes.blob()
             self._videoBlobCache.set(event.request.url, blob)
-            // Limpa após 30 minutos
             setTimeout(() => self._videoBlobCache.delete(event.request.url), 30 * 60 * 1000)
           }
 
@@ -98,7 +86,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 2. Não intercepta streams de vídeo, proxies ou APIs externas (permite streaming HTTP nativo)
+  // 2. Não intercepta streams de vídeo ao vivo remotos, proxies ou APIs externas (permite streaming HTTP nativo)
   if (event.request.method !== 'GET') return
   if (
     event.request.destination === 'video' ||
@@ -122,17 +110,37 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // 3. Para navegação de páginas (HTML)
+  // 3. Para navegação de páginas (HTML shell do app no Safari iOS e PWA)
+  // Network-first com fallback imediato para o cache quando estiver offline
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match('/index.html') || caches.match('/')
-      })
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone()
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, copy)
+              cache.put('/index.html', copy.clone())
+              cache.put('/', copy.clone())
+            })
+          }
+          return networkResponse
+        })
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME)
+          const cached =
+            (await cache.match(event.request)) ||
+            (await cache.match('/index.html')) ||
+            (await cache.match('/'))
+          if (cached) return cached
+          return new Response('Offline', { status: 503, statusText: 'Offline' })
+        })
     )
     return
   }
 
-  // 3. Stale-while-revalidate para recursos estáticos (CSS, JS, imagens locais)
+  // 4. Recursos estáticos da aplicação (JS, CSS, Imagens, Fontes)
+  // Cache-first com atualização em segundo plano para garantir carregamento instantâneo offline
   if (
     url.origin === self.location.origin ||
     url.hostname.includes('fonts.googleapis.com') ||
@@ -140,7 +148,23 @@ self.addEventListener('fetch', (event) => {
   ) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request)
+        if (cachedResponse) {
+          // Atualiza o cache silenciosamente em background se houver internet
+          fetch(event.request)
+            .then((networkResponse) => {
+              if (networkResponse && networkResponse.status === 200) {
+                const copy = networkResponse.clone()
+                caches.open(CACHE_NAME).then((cache) => {
+                  cache.put(event.request, copy)
+                })
+              }
+            })
+            .catch(() => {})
+          return cachedResponse
+        }
+
+        // Não estava no cache: busca na rede e guarda no cache
+        return fetch(event.request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
               const copy = networkResponse.clone()
@@ -150,9 +174,9 @@ self.addEventListener('fetch', (event) => {
             }
             return networkResponse
           })
-          .catch(() => cachedResponse)
-
-        return cachedResponse || fetchPromise
+          .catch(() => {
+            return cachedResponse || new Response('', { status: 408 })
+          })
       })
     )
   }

@@ -1,4 +1,4 @@
-import { useState, useDeferredValue, Suspense, lazy } from 'react'
+import { useState, useEffect, useDeferredValue, Suspense, lazy } from 'react'
 import type { Section } from '../../types'
 import { useProfiles } from '../../context/ProfileContext'
 import { trailerCoordinator } from '../../services/trailerCoordinator'
@@ -15,11 +15,37 @@ const ProfileEditModal = lazy(() => import('../ProfileEditModal'))
 
 export default function MobileShell() {
   const { active: profile } = useProfiles()
-  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
 
-  const [section, setSection] = useState<Section | 'my-netflix'>(isOffline ? 'downloads' : 'home')
+  const [section, setSection] = useState<Section | 'my-netflix'>(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return 'downloads'
+    return 'home'
+  })
   const [search, setSearch] = useState('')
   const [showEditProfileModal, setShowEditProfileModal] = useState(false)
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setIsOffline(true)
+      setSection('downloads')
+    }
+    const handleOnline = () => {
+      setIsOffline(false)
+    }
+
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsOffline(true)
+      setSection('downloads')
+    }
+
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [])
 
   const handleSelectSection = (s: Section | 'my-netflix') => {
     trailerCoordinator.stopAll()

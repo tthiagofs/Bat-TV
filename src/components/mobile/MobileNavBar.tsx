@@ -1,4 +1,5 @@
-import { Home, Tv, Film, Clapperboard, Trophy } from 'lucide-react'
+import { Home, Tv, Film, Clapperboard, Trophy, Download } from 'lucide-react'
+import { useState, useEffect } from 'react'
 import { useProfiles } from '../../context/ProfileContext'
 import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
 import type { Section } from '../../types'
@@ -10,39 +11,69 @@ interface Props {
 
 export default function MobileNavBar({ activeSection, onSelectSection }: Props) {
   const { active: profile } = useProfiles()
+  const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
 
-  const navItems = [
-    {
-      id: 'home' as const,
-      label: 'Início',
-      icon: Home,
-    },
-    {
-      id: 'live' as const,
-      label: 'TV Ao Vivo',
-      icon: Tv,
-    },
-    {
-      id: 'movies' as const,
-      label: 'Filmes',
-      icon: Film,
-    },
-    {
-      id: 'series' as const,
-      label: 'Séries',
-      icon: Clapperboard,
-    },
-    {
-      id: 'sports' as const,
-      label: 'Esportes',
-      icon: Trophy,
-    },
-    {
-      id: 'my-netflix' as const,
-      label: profile?.name ? profile.name.slice(0, 8) : 'Perfil',
-      isProfile: true,
-    },
-  ]
+  useEffect(() => {
+    const handleOffline = () => setIsOffline(true)
+    const handleOnline = () => setIsOffline(false)
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('offline', handleOffline)
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [])
+
+  const navItems = isOffline
+    ? [
+        {
+          id: 'home' as const,
+          label: 'Início',
+          icon: Home,
+        },
+        {
+          id: 'downloads' as const,
+          label: 'Baixados',
+          icon: Download,
+        },
+        {
+          id: 'my-netflix' as const,
+          label: profile?.name ? profile.name.slice(0, 8) : 'Perfil',
+          isProfile: true,
+        },
+      ]
+    : [
+        {
+          id: 'home' as const,
+          label: 'Início',
+          icon: Home,
+        },
+        {
+          id: 'live' as const,
+          label: 'TV Ao Vivo',
+          icon: Tv,
+        },
+        {
+          id: 'movies' as const,
+          label: 'Filmes',
+          icon: Film,
+        },
+        {
+          id: 'series' as const,
+          label: 'Séries',
+          icon: Clapperboard,
+        },
+        {
+          id: 'sports' as const,
+          label: 'Esportes',
+          icon: Trophy,
+        },
+        {
+          id: 'my-netflix' as const,
+          label: profile?.name ? profile.name.slice(0, 8) : 'Perfil',
+          isProfile: true,
+        },
+      ]
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-lg border-t border-white/10 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5 px-1 sm:px-2">
