@@ -328,6 +328,25 @@ export default function Player({
       e.stopPropagation()
     }
 
+    // No player nativo (Android APK / Fire Stick TV), controle remoto apenas alterna os controles
+    if (isNative) {
+      if (showFloatingSkip) {
+        setShowFloatingSkip(false)
+        window.clearTimeout(floatingSkipTimer.current)
+      }
+      window.clearTimeout(hideTimer.current)
+      setShowControls((prev) => {
+        const next = !prev
+        if (next) {
+          hideTimer.current = window.setTimeout(() => {
+            setShowControls((cur) => (showQuickZap || showQualityMenu || showAudioSubMenu ? true : false))
+          }, 4500)
+        }
+        return next
+      })
+      return
+    }
+
     // Se o botão flutuante de pular abertura estiver visível, fecha imediatamente ao clicar na tela
     if (showFloatingSkip) {
       setShowFloatingSkip(false)
@@ -369,7 +388,7 @@ export default function Player({
       }
       return next
     })
-  }, [showQuickZap, showQualityMenu, showAudioSubMenu, needsUnmute, needsUserGesture, showFloatingSkip])
+  }, [showQuickZap, showQualityMenu, showAudioSubMenu, needsUnmute, needsUserGesture, showFloatingSkip, isNative, playing])
 
   const [time, setTime] = useState({ current: 0, duration: 0 })
   const [epg, setEpg] = useState<EpgEntry[]>([])
@@ -1583,8 +1602,8 @@ export default function Player({
         className="absolute inset-0 z-10 cursor-pointer touch-manipulation"
       />
 
-      {/* Botão flutuante para desmutar quando autoplay iniciar mudo no celular */}
-      {needsUnmute && !error && (
+      {/* Botão flutuante para desmutar quando autoplay iniciar mudo no celular/web */}
+      {!isNative && needsUnmute && !error && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 fade-up pointer-events-auto">
           <button
             type="button"
@@ -1605,7 +1624,7 @@ export default function Player({
       )}
 
       {/* Botão central quando o navegador móvel exigir interação explícita do usuário */}
-      {needsUserGesture && !playing && !error && (
+      {!isNative && needsUserGesture && !playing && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-40 bg-black/60 backdrop-blur-xs p-6 text-center space-y-4 fade-up">
           <button
             type="button"

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Capacitor } from '@capacitor/core'
 import Player from '../components/Player'
 import PwaPlayer from '../components/PwaPlayer'
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -51,13 +52,15 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const historyRef = useRef(active?.history ?? [])
   historyRef.current = active?.history ?? []
 
-  // Detecta se está rodando no PWA instalado (Standalone / Tela de Início no iPhone ou Android)
+  // Detecta se está rodando no PWA instalado (Standalone / Tela de Início no iPhone ou Android móvel).
+  // No Fire Stick / Android TV / Capacitor nativo ou Electron, NUNCA usa o PwaPlayer.
   const isPwa = useMemo(() => {
     if (typeof window === 'undefined') return false
+    if (Capacitor.isNativePlatform()) return false
+    if (window.__IS_ANDROID_TV__ === true) return false
     return (
       (window.navigator as any).standalone === true ||
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: fullscreen)').matches
+      window.matchMedia('(display-mode: standalone)').matches
     )
   }, [])
 

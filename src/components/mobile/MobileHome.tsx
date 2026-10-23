@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
-import { Play, Star, Film, Tv, Radio, Loader2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Play, Star, Film, Tv, Radio, Loader2, Clock, Flame, Info } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { usePlayback } from '../../context/PlaybackContext'
 import { useProfiles } from '../../context/ProfileContext'
-import { getRecommendedItems, getPreviewItems } from '../../services/catalog'
-import { getTrendingHero, searchTmdbItem, type TmdbItem } from '../../services/tmdbService'
+import { getRecommendedItems, getPreviewItems, searchTitleInCatalog } from '../../services/catalog'
+import { getTrendingHero, searchTmdbItem, getTop10ByProvider, STREAMING_PROVIDERS, type TmdbItem, type StreamingProvider } from '../../services/tmdbService'
+import { getProviderLogoComponent } from '../StreamingLogos'
 import type { MediaItem, Section } from '../../types'
 import MobileHeroBanner from './MobileHeroBanner'
 import MediaDetailsModal from '../MediaDetailsModal'
@@ -24,6 +25,36 @@ export default function MobileHome({ onNavigate }: Props) {
   const [live, setLive] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<TmdbItem | null>(null)
+
+  // Top 10 Streamings (padrão Netflix)
+  const [activeProvider, setActiveProvider] = useState<StreamingProvider>(STREAMING_PROVIDERS[0])
+  const [top10Items, setTop10Items] = useState<TmdbItem[]>([])
+  const [top10Loading, setTop10Loading] = useState(false)
+
+  // Continuar Assistindo (histórico do perfil com progresso > 0)
+  const continueWatching = useMemo(() => {
+    return (profile?.history || [])
+      .filter((h) => h.duration > 0 && h.position / h.duration > 0.02 && h.position / h.duration < 0.95)
+      .slice(0, 10)
+  }, [profile?.history])
+
+  // Busca Top 10 da plataforma selecionada (Netflix, Prime, Max, Disney+)
+  useEffect(() => {
+    let active = true
+    setTop10Loading(true)
+
+    getTop10ByProvider(activeProvider.id)
+      .then((res) => {
+        if (active) setTop10Items(res)
+      })
+      .finally(() => {
+        if (active) setTop10Loading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [activeProvider])
 
   useEffect(() => {
     let isCurrent = true
@@ -116,7 +147,166 @@ export default function MobileHome({ onNavigate }: Props) {
       )}
 
       {/* 2. Carrosséis de Conteúdo com Toque Horizontal */}
-      <div className="px-4 space-y-6">
+      <div className="px-4 space-y-7">
+        {/* Continuar Assistindo (Se houver progresso salvo no perfil) */}
+        {continueWatching.length > 0 && (
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-rose-500" />
+              <h2 className="font-extrabold text-base text-white tracking-tight">
+                Continuar assistindo
+              </h2>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
+              {continueWatching.map((item) => {
+                const percent = Math.min(100, Math.max(2, (item.position / item.duration) * 100))
+                const remainingMin = Math.max(1, Math.round((item.duration - item.position) / 60))
+
+                return (
+                  <div
+                    key={item.key || item.id}
+                    onClick={() => play(item, { fromStart: false })}
+                    className="shrink-0 w-44 rounded-xl overflow-hidden bg-zinc-900 border border-white/10 active:scale-95 transition cursor-pointer flex flex-col group"
+                  >
+                    {/* Thumbnail 16:9 com Barra de Progresso */}
+                    <div className="aspect-video w-full bg-zinc-800 relative overflow-hidden">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                          {item.type === 'series' ? <Tv size={24} /> : <Film size={24} />}
+                        </div>
+                      )}
+
+                      {/* Botão de Play circular translúcido no centro */}
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-black/70 border border-white/30 backdrop-blur-xs flex items-center justify-center text-white shadow-lg group-active:scale-90 transition">
+                          <Play size={14} className="fill-white translate-x-0.5" />
+                        </div>
+                      </div>
+
+                      {/* Barra de Progresso Vermelha na Base */}
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-700/80">
+                        <div
+                          className="h-full bg-rose-600 rounded-r-full"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Título e Info do Episódio */}
+                    <div className="p-2 flex-1 flex flex-col justify-between">
+                      <p className="text-xs font-bold text-white truncate leading-tight">
+                        {item.name}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5 truncate">
+                        {item.episode?.title
+                          ? item.episode.title
+                          : item.type === 'series'
+                          ? 'Série'
+                          : `Restam ${remainingMin} min`}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Top 10 Mais Assistidos no Brasil Adaptado para Mobile Vertical */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-rose-600/20 text-rose-500 border border-rose-500/30">
+              <Flame size={16} />
+            </div>
+            <div>
+              <h2 className="font-extrabold text-base text-white tracking-tight leading-tight">
+                Top 10 no Brasil
+              </h2>
+              <p className="text-[11px] text-zinc-400">
+                Mais assistidos hoje na {activeProvider.name}
+              </p>
+            </div>
+          </div>
+
+          {/* Seletor Compacto das 4 Plataformas com Logos Oficiais em SVG */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+            {STREAMING_PROVIDERS.map((prov) => {
+              const isSel = prov.id === activeProvider.id
+              const LogoComp = getProviderLogoComponent(prov.id)
+              return (
+                <button
+                  key={prov.id}
+                  onClick={() => setActiveProvider(prov)}
+                  className={`shrink-0 flex items-center justify-center px-3.5 py-1.5 rounded-xl transition cursor-pointer active:scale-95 ${
+                    isSel
+                      ? 'bg-zinc-800 text-white border border-zinc-600 shadow-md ring-1 ring-zinc-500 scale-[1.02]'
+                      : 'bg-zinc-950/80 text-zinc-400 border border-zinc-800/80 hover:text-white'
+                  }`}
+                  title={prov.name}
+                >
+                  <div className="h-4 flex items-center">
+                    <LogoComp className="h-3.5 w-auto" />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Carrossel do Top 10 com Número Estilizado e Pôster Compacto */}
+          {top10Loading ? (
+            <div className="h-44 bg-zinc-950/60 rounded-2xl border border-zinc-800/60 flex items-center justify-center">
+              <Loader2 size={24} className="animate-spin text-rose-500" />
+            </div>
+          ) : (
+            <div className="flex gap-1 overflow-x-auto no-scrollbar py-2">
+              {top10Items.map((it, idx) => (
+                <div
+                  key={it.id}
+                  onClick={() => setSelectedItem(it)}
+                  className="shrink-0 flex items-end group relative select-none cursor-pointer active:scale-95 transition"
+                >
+                  {/* Número Estilizado 1 ao 10 no estilo Netflix */}
+                  <span
+                    className="font-black text-6xl leading-none text-zinc-800 select-none -mr-3 z-0"
+                    style={{ WebkitTextStroke: '1.5px #3f3f46' }}
+                  >
+                    {idx + 1}
+                  </span>
+
+                  {/* Pôster Vertical Compacto */}
+                  <div className="w-28 aspect-[2/3] rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800 z-10 relative shadow-md">
+                    {it.posterPath ? (
+                      <img
+                        src={it.posterPath}
+                        alt={it.title}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center p-2 text-center text-[10px] text-zinc-500 font-bold">
+                        {it.title}
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-1.5 right-1.5 flex items-center gap-1 bg-black/75 px-1.5 py-0.5 rounded text-[10px] text-amber-400 font-bold backdrop-blur-xs">
+                      <Star size={10} className="fill-amber-400" />
+                      <span>{it.voteAverage}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Séries em Alta */}
         {series.length > 0 && (
           <div className="space-y-2.5">

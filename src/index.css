@@ -43,9 +43,13 @@ html.native-player-active,
 html.native-player-active body,
 html.native-player-active #root,
 body.native-player-active,
-body.native-player-active #root {
+body.native-player-active #root,
+html.native-player-active [data-tv-player="true"],
+body.native-player-active [data-tv-player="true"] {
   background: transparent !important;
   background-color: transparent !important;
+  transform: none !important;
+  -webkit-transform: none !important;
 }
 
 body.native-player-active #app-shell-wrapper,
@@ -83,19 +87,13 @@ html.tv-perf-mode *::after {
   backdrop-filter: none !important;
 }
 
-html.tv-perf-mode {
-  /* Força renderização acelerada por GPU */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-}
-
-/* Modais, cabeçalhos e painéis recebem fundo sólido e limpo no modo TV */
-html.tv-perf-mode [role="dialog"],
+/* Modais, cabeçalhos e painéis recebem fundo sólido e limpo no modo TV (isolado do player de vídeo) */
+html.tv-perf-mode [role="dialog"]:not([data-tv-player="true"]):not([data-tv-player="true"] *),
 html.tv-perf-mode [data-tv-modal="true"],
-html.tv-perf-mode .bg-zinc-950\/80,
-html.tv-perf-mode .bg-zinc-900\/90,
-html.tv-perf-mode .bg-black\/80,
-html.tv-perf-mode .bg-black\/60 {
+html.tv-perf-mode #app-shell-wrapper .bg-zinc-950\/80,
+html.tv-perf-mode #app-shell-wrapper .bg-zinc-900\/90,
+html.tv-perf-mode #app-shell-wrapper .bg-black\/80,
+html.tv-perf-mode #app-shell-wrapper .bg-black\/60 {
   background-color: #0c0c0e !important;
 }
 
