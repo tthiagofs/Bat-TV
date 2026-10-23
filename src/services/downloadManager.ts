@@ -373,20 +373,38 @@ class DownloadManager {
       this.webAbortControllers.set(item.id, abortController)
       const signal = abortController.signal
 
-      // Se for Web / iOS, sempre prefere container MP4 (Xtream faz remux automático e Safari suporta 100%)
-      const targetUrl = item.remoteUrl.replace(/\.mkv$/i, '.mp4')
-      const proxyUrl = buildProxyUrl(targetUrl)
+      // Tenta obter o tamanho e suporte a Range na URL remota do arquivo
+      let targetUrl = item.remoteUrl
+      let proxyUrl = buildProxyUrl(targetUrl)
 
       // 1. Tenta descobrir o tamanho total do arquivo
       let totalBytes = item.totalBytes || 0
       let supportsRange = false
 
       try {
-        const probeRes = await fetch(proxyUrl, {
+        let probeRes = await fetch(proxyUrl, {
           method: 'GET',
           headers: { Range: 'bytes=0-1023' },
           signal,
         })
+
+        // Se o servidor Xtream não aceitou a URL original (.mkv), tenta com extensão .mp4
+        if (!probeRes.ok && probeRes.status !== 206 && targetUrl.endsWith('.mkv')) {
+          const altUrl = targetUrl.replace(/\.mkv$/i, '.mp4')
+          const altProxyUrl = buildProxyUrl(altUrl)
+          try {
+            const altProbe = await fetch(altProxyUrl, {
+              method: 'GET',
+              headers: { Range: 'bytes=0-1023' },
+              signal,
+            })
+            if (altProbe.ok || altProbe.status === 206) {
+              targetUrl = altUrl
+              proxyUrl = altProxyUrl
+              probeRes = altProbe
+            }
+          } catch {}
+        }
 
         if (probeRes.status === 206) {
           supportsRange = true
@@ -530,6 +548,21 @@ class DownloadManager {
             }
           }
         }
+
+        // Checagem de integridade no stream contínuo: impede salvar arquivo truncado como concluído
+        const MIN_REQUIRED_BYTES = 10 * 1024 * 1024 // 10 MB
+        if ((totalBytes > 0 && receivedBytes < totalBytes * 0.85) || receivedBytes < MIN_REQUIRED_BYTES) {
+          const currentPartial = new Blob(chunks)
+          await saveMediaBlob(`partial_${item.id}`, currentPartial).catch(() => {})
+          await markDownloadPaused(item.id, 'Download incompleto (conexão interrompida pelo servidor)')
+          this.currentDownloadingId = null
+          this.currentChunksRef = []
+          this.webAbortControllers.delete(item.id)
+          this.isProcessing = false
+          await this.checkAndSyncKeepAlive()
+          this.notify()
+          return
+        }
       }
 
       // Cria Blob com formato MP4 compatível com Safari iOS e Chrome
@@ -541,7 +574,7 @@ class DownloadManager {
       await deleteMediaBlob(`partial_${item.id}`).catch(() => {})
 
       const localPath = `indexeddb://${item.id}`
-      const playUrl = `/offline-media/${item.id}.mp4`
+      const playUrl = `blob-store://${item.id}`
 
       await markDownloadCompleted(item.id, localPath, playUrl, finalSize)
       this.currentDownloadingId = null
@@ -635,26 +668,15 @@ class DownloadManager {
   }
 
   public async getPlayableUrl(item: DownloadedMedia): Promise<string> {
-    // 1. Se for mídia salva no Cache Storage ou IndexedDB (Web / PWA)
+    // 1. Se for mídia salva no IndexedDB ou Cache Storage (Web / PWA)
     if (item.playUrl?.startsWith('blob-store://') || item.playUrl?.startsWith('/offline-media/') || item.localPath?.startsWith('indexeddb://')) {
-      // Prioridade absoluta: URL do Service Worker (/offline-media/...) com suporte a HTTP 206 Range.
-      // No Safari iOS, o AVPlayer FALHA após 6 segundos se usado com blob: URL, pois blobs não respondem a range requests.
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        try {
-          if (!navigator.serviceWorker.controller) {
-            await navigator.serviceWorker.ready
-          }
-        } catch {}
-        return `/offline-media/${item.id}.mp4`
-      }
-
       if (this.activeBlobUrls.has(item.id)) {
         return this.activeBlobUrls.get(item.id)!
       }
 
-      // Fallback para navegadores sem suporte a Service Worker (e.g. aba anônima)
+      // Recupera o Blob diretamente do IndexedDB local (100% instantâneo e offline, sem bloqueios de Service Worker)
       const blob = await getMediaBlob(item.id)
-      if (blob) {
+      if (blob && blob.size > 0) {
         const blobUrl = URL.createObjectURL(blob)
         this.activeBlobUrls.set(item.id, blobUrl)
         return blobUrl
@@ -662,7 +684,7 @@ class DownloadManager {
     }
 
     // 2. Se for arquivo nativo no Capacitor ou Electron
-    if (item.playUrl && !item.playUrl.startsWith('blob-store://') && item.playUrl !== 'local-storage://simulated') {
+    if (item.playUrl && !item.playUrl.startsWith('blob-store://') && !item.playUrl.startsWith('/offline-media/') && item.playUrl !== 'local-storage://simulated') {
       return item.playUrl
     }
 
