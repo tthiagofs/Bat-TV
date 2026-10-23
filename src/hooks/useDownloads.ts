@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { downloadManager, type StorageInfo } from '../services/downloadManager'
 import { getLocalBackup, type DownloadedMedia } from '../services/downloadDb'
+import { backgroundKeepAlive } from '../services/backgroundKeepAlive'
 
 export function useDownloads() {
   const [downloads, setDownloads] = useState<DownloadedMedia[]>(() => getLocalBackup())
@@ -56,6 +57,8 @@ export function useDownloads() {
       remoteUrl: string
       duration?: number
     }) => {
+      // Ativa keep-alive sincronicamente dentro do gesto do usuário no iOS Safari / PWA
+      backgroundKeepAlive.acquire()
       return downloadManager.requestDownload(item)
     },
     []
@@ -66,6 +69,8 @@ export function useDownloads() {
   }, [])
 
   const resume = useCallback(async (id: string) => {
+    // Ativa keep-alive sincronicamente dentro do gesto do usuário no iOS Safari / PWA
+    backgroundKeepAlive.acquire()
     return downloadManager.resumeDownload(id)
   }, [])
 

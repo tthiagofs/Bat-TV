@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bat-tv-pwa-v7'
+const CACHE_NAME = 'bat-tv-pwa-v8'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -34,6 +34,37 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Helper para recuperar Blob do IndexedDB quando o Cache Storage estiver indisponível ou com cota excedida
+function getBlobFromIndexedDB(id) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('bat-tv-downloads-db', 2)
+      req.onerror = () => resolve(null)
+      req.onblocked = () => resolve(null)
+      req.onsuccess = () => {
+        const db = req.result
+        try {
+          const tx = db.transaction('media_blobs', 'readonly')
+          const store = tx.objectStore('media_blobs')
+          const getReq = store.get(id)
+          getReq.onsuccess = () => {
+            if (getReq.result && getReq.result.blob) {
+              resolve(getReq.result.blob)
+            } else {
+              resolve(null)
+            }
+          }
+          getReq.onerror = () => resolve(null)
+        } catch {
+          resolve(null)
+        }
+      }
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
 // Interceptação de requisições
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
@@ -41,32 +72,87 @@ self.addEventListener('fetch', (event) => {
   // 1. Atende requisições de vídeos offline baixados (/offline-media/...) com suporte a HTTP 206 Range (iOS Safari)
   if (url.pathname.startsWith('/offline-media/')) {
     event.respondWith(
-      caches.open('bat-tv-media-cache').then(async (cache) => {
-        const cachedRes = await cache.match(event.request.url)
-        if (!cachedRes) {
-          return new Response('Vídeo offline não encontrado', { status: 404 })
+      (async () => {
+        const idMatch = url.pathname.match(/\/offline-media\/(.+?)\.mp4$/i)
+        const mediaId = idMatch ? decodeURIComponent(idMatch[1]) : ''
+
+        if (!self._videoBlobCache) self._videoBlobCache = new Map()
+        let blob = self._videoBlobCache.get(url.pathname)
+
+        // 1.1 Se não está na memória temporária do SW, busca no Cache Storage
+        if (!blob) {
+          try {
+            const cache = await caches.open('bat-tv-media-cache')
+            const matchRes = (await cache.match(event.request.url)) || (await cache.match(url.pathname))
+            if (matchRes) {
+              blob = await matchRes.blob()
+            }
+          } catch {}
         }
 
+        // 1.2 Se não encontrou no Cache Storage, busca diretamente no IndexedDB do app
+        if (!blob && mediaId) {
+          try {
+            blob = await getBlobFromIndexedDB(mediaId)
+          } catch {}
+        }
+
+        if (!blob || blob.size === 0) {
+          return new Response('Vídeo offline não encontrado no armazenamento local', { status: 404 })
+        }
+
+        // Armazena em cache na memória do SW durante a sessão de reprodução
+        self._videoBlobCache.set(url.pathname, blob)
+
+        const totalSize = blob.size
         const rangeHeader = event.request.headers.get('range')
+
+        // Se o player não enviou cabeçalho Range, retorna o vídeo com cabeçalhos de aceitação de Range
         if (!rangeHeader) {
-          return cachedRes
+          return new Response(blob, {
+            status: 200,
+            statusText: 'OK',
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': String(totalSize),
+              'Accept-Ranges': 'bytes',
+            },
+          })
         }
 
-        // Suporte a HTTP 206 Partial Content para iOS Safari conseguir dar seek e reproduzir offline
+        // Suporte a HTTP 206 Partial Content para iOS Safari / AVPlayer conseguir dar seek e reproduzir offline
         try {
-          if (!self._videoBlobCache) self._videoBlobCache = new Map()
-          let blob = self._videoBlobCache.get(event.request.url)
-          if (!blob) {
-            blob = await cachedRes.blob()
-            self._videoBlobCache.set(event.request.url, blob)
-            setTimeout(() => self._videoBlobCache.delete(event.request.url), 30 * 60 * 1000)
+          const parts = rangeHeader.replace(/bytes=/, '').split('-')
+          let start = 0
+          let end = totalSize - 1
+
+          if (parts[0] === '' && parts[1]) {
+            // Range do tipo: bytes=-500 (últimos 500 bytes)
+            const suffix = parseInt(parts[1], 10)
+            if (!isNaN(suffix) && suffix > 0) {
+              start = Math.max(0, totalSize - suffix)
+            }
+          } else {
+            if (parts[0]) {
+              const pStart = parseInt(parts[0], 10)
+              if (!isNaN(pStart)) start = pStart
+            }
+            if (parts[1]) {
+              const pEnd = parseInt(parts[1], 10)
+              if (!isNaN(pEnd)) end = pEnd
+            }
           }
 
-          const totalSize = blob.size
-          const parts = rangeHeader.replace(/bytes=/, '').split('-')
-          const start = parseInt(parts[0], 10) || 0
-          const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1
-          const sliced = blob.slice(start, end + 1)
+          if (start >= totalSize || end >= totalSize || start > end) {
+            return new Response('Range não satisfatório', {
+              status: 416,
+              headers: {
+                'Content-Range': `bytes */${totalSize}`,
+              },
+            })
+          }
+
+          const sliced = blob.slice(start, end + 1, 'video/mp4')
 
           return new Response(sliced, {
             status: 206,
@@ -79,9 +165,16 @@ self.addEventListener('fetch', (event) => {
             },
           })
         } catch {
-          return cachedRes
+          return new Response(blob, {
+            status: 200,
+            headers: {
+              'Content-Type': 'video/mp4',
+              'Content-Length': String(totalSize),
+              'Accept-Ranges': 'bytes',
+            },
+          })
         }
-      })
+      })()
     )
     return
   }

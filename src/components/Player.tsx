@@ -1562,7 +1562,8 @@ export default function Player({
             }
 
             // 3. Se for falha real no início da reprodução, tenta automaticamente o formato alternativo (.mp4 <-> .mkv)
-            if (!isLive && !hasAutoTriedExt && time.current < 5 && (activeUrl.endsWith('.mp4') || activeUrl.endsWith('.mkv'))) {
+            const isOfflineLocal = activeUrl.startsWith('/offline-media/') || activeUrl.startsWith('blob:')
+            if (!isLive && !isOfflineLocal && !hasAutoTriedExt && time.current < 5 && (activeUrl.endsWith('.mp4') || activeUrl.endsWith('.mkv'))) {
               setHasAutoTriedExt(true)
               const nextUrl = activeUrl.endsWith('.mp4')
                 ? activeUrl.replace(/\.mp4$/, '.mkv')
@@ -1689,7 +1690,7 @@ export default function Player({
               <RotateCcw size={18} />
               <span>Tentar Novamente</span>
             </button>
-            {!isLive && (activeUrl.endsWith('.mp4') || activeUrl.endsWith('.mkv')) && (
+            {!isLive && !activeUrl.startsWith('/offline-media/') && !activeUrl.startsWith('blob:') && (activeUrl.endsWith('.mp4') || activeUrl.endsWith('.mkv')) && (
               <button
                 tabIndex={0}
                 onClick={toggleVodFormat}

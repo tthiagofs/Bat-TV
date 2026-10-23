@@ -17,6 +17,7 @@ import { searchTitleInCatalog } from '../services/catalog'
 import { useProfiles } from '../context/ProfileContext'
 import { useFavorites } from '../context/FavoritesContext'
 import { useDownloads } from '../hooks/useDownloads'
+import { backgroundKeepAlive } from '../services/backgroundKeepAlive'
 import type { MediaItem } from '../types'
 import CarouselContainer from './CarouselContainer'
 import { cleanTitle, findInCatalog } from '../utils/match'
@@ -318,6 +319,8 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
   const handleDownloadMovie = async () => {
     if (isMovieDownloaded || isMovieDownloading || startingDownload) return
     if (!service) return
+    // Ativa imediatamente dentro do gesto do usuário no iOS Safari / PWA
+    backgroundKeepAlive.acquire()
     setStartingDownload(true)
     setDownloadError(null)
 
@@ -359,6 +362,8 @@ export default function MediaDetailsModal({ item, onClose }: Props) {
     if (!service) return
     const epId = getEpisodeDownloadId(ep.episodeNumber)
     if (isDownloaded(epId) || isDownloading(epId)) return
+    // Ativa imediatamente dentro do gesto do usuário no iOS Safari / PWA
+    backgroundKeepAlive.acquire()
 
     try {
       let targetItem = currentItem.mediaItem

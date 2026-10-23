@@ -48,6 +48,9 @@ class DownloadManager {
   private cleanupElectronListeners: (() => void)[] = []
   private webAbortControllers: Map<string, AbortController> = new Map()
   private activeBlobUrls: Map<string, string> = new Map()
+  private currentDownloadingId: string | null = null
+  private lastProgressAt: number = Date.now()
+  private currentChunksRef: BlobPart[] = []
 
   constructor() {
     this.setupListeners()
@@ -60,9 +63,46 @@ class DownloadManager {
       })
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+          // Se o app voltou do segundo plano e o download estava estagnado por mais de 35s, recupera
+          if (this.isProcessing && Date.now() - this.lastProgressAt > 35000) {
+            this.lastProgressAt = Date.now()
+            if (this.currentDownloadingId) {
+              const ctrl = this.webAbortControllers.get(this.currentDownloadingId)
+              if (ctrl) {
+                try {
+                  ctrl.abort()
+                } catch {}
+              }
+            }
+          }
+          this.checkAndSyncKeepAlive()
           this.processQueue()
+        } else if (document.visibilityState === 'hidden') {
+          this.checkAndSyncKeepAlive()
+          this.saveCurrentPartialCheckpoint()
         }
       })
+    }
+  }
+
+  public async checkAndSyncKeepAlive(): Promise<void> {
+    try {
+      const list = await getAllDownloads()
+      const hasActive = list.some((i) => i.status === 'queued' || i.status === 'downloading')
+      if (hasActive) {
+        backgroundKeepAlive.acquire()
+      } else {
+        backgroundKeepAlive.release()
+      }
+    } catch {}
+  }
+
+  private async saveCurrentPartialCheckpoint(): Promise<void> {
+    if (this.currentDownloadingId && this.currentChunksRef.length > 0) {
+      try {
+        const partialBlob = new Blob(this.currentChunksRef)
+        await saveMediaBlob(`partial_${this.currentDownloadingId}`, partialBlob)
+      } catch {}
     }
   }
 
@@ -229,9 +269,14 @@ class DownloadManager {
     }
     const list = await getAllDownloads()
     const queued = list.find((i) => i.status === 'queued') || list.find((i) => i.status === 'downloading')
-    if (!queued) return
+    if (!queued) {
+      await this.checkAndSyncKeepAlive()
+      return
+    }
 
     this.isProcessing = true
+    this.currentDownloadingId = queued.id
+    backgroundKeepAlive.acquire()
     await this.startItemDownload(queued)
   }
 
@@ -319,7 +364,7 @@ class DownloadManager {
 
     // Plataforma 3: Web Browser (Safari iOS / Chrome / PWA / Vercel)
     try {
-      await backgroundKeepAlive.acquire()
+      backgroundKeepAlive.acquire()
 
       await upsertDownload({ ...item, status: 'downloading' })
       this.notify()
@@ -361,6 +406,8 @@ class DownloadManager {
       }
 
       const chunks: BlobPart[] = []
+      this.currentChunksRef = chunks
+      this.lastProgressAt = Date.now()
       let receivedBytes = 0
 
       // Verifica se há chunks parciais salvos anteriormente para retomar sem reiniciar do zero
@@ -372,7 +419,6 @@ class DownloadManager {
       }
 
       // Se o servidor suporta Range e temos o tamanho total, baixa em fatias seguras de 4MB
-      // Isso evita timeout no Vercel Serverless Function e permite download resiliente
       const CHUNK_SIZE = 4 * 1024 * 1024 // 4 MB
 
       if (supportsRange && totalBytes > 0) {
@@ -389,10 +435,22 @@ class DownloadManager {
           for (let attempt = 0; attempt < 3; attempt++) {
             if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
             try {
-              const chunkRes = await fetch(proxyUrl, {
-                headers: { Range: `bytes=${start}-${end}` },
-                signal,
-              })
+              // Timeout por chunk de 25s para garantir que conexões suspensas pelo iOS não fiquem travadas
+              const chunkController = new AbortController()
+              const chunkTimeout = setTimeout(() => chunkController.abort(), 25000)
+              const onAbort = () => chunkController.abort()
+              signal.addEventListener('abort', onAbort, { once: true })
+
+              let chunkRes: Response
+              try {
+                chunkRes = await fetch(proxyUrl, {
+                  headers: { Range: `bytes=${start}-${end}` },
+                  signal: chunkController.signal,
+                })
+              } finally {
+                clearTimeout(chunkTimeout)
+                signal.removeEventListener('abort', onAbort)
+              }
 
               if (!chunkRes.ok && chunkRes.status !== 206) {
                 throw new Error(`HTTP ${chunkRes.status} na fatia ${start}-${end}`)
@@ -401,10 +459,11 @@ class DownloadManager {
               const buffer = await chunkRes.arrayBuffer()
               chunks.push(buffer)
               receivedBytes += buffer.byteLength
+              this.lastProgressAt = Date.now()
               chunkSuccess = true
               break
             } catch (err: any) {
-              if (err.name === 'AbortError') throw err
+              if (signal.aborted) throw err
               lastErr = err
               await new Promise((r) => setTimeout(r, 1000))
             }
@@ -415,9 +474,11 @@ class DownloadManager {
             const currentPartial = new Blob(chunks)
             await saveMediaBlob(`partial_${item.id}`, currentPartial).catch(() => {})
             await markDownloadPaused(item.id, 'Download pausado (sem conexão)')
-            backgroundKeepAlive.release()
+            this.currentDownloadingId = null
+            this.currentChunksRef = []
             this.webAbortControllers.delete(item.id)
             this.isProcessing = false
+            await this.checkAndSyncKeepAlive()
             this.notify()
             return
           }
@@ -427,9 +488,9 @@ class DownloadManager {
           await updateDownloadProgress(item.id, percent, receivedBytes, totalBytes)
           this.notify()
 
-          // Salva backup parcial a cada 20 segundos para resiliência máxima
+          // Salva backup parcial a cada 60 segundos para não onerar o I/O do iOS
           const now = Date.now()
-          if (now - lastPartialSave > 20000) {
+          if (now - lastPartialSave > 60000) {
             lastPartialSave = now
             const currentPartial = new Blob(chunks)
             await saveMediaBlob(`partial_${item.id}`, currentPartial).catch(() => {})
@@ -458,6 +519,7 @@ class DownloadManager {
           if (value) {
             chunks.push(value)
             receivedBytes += value.length
+            this.lastProgressAt = Date.now()
 
             const now = Date.now()
             if (now - lastNotify > 300) {
@@ -474,21 +536,24 @@ class DownloadManager {
       const blob = new Blob(chunks, { type: 'video/mp4' })
       const finalSize = blob.size || receivedBytes
 
-      // Grava no IndexedDB local do dispositivo
+      // Grava no IndexedDB e CacheStorage local do dispositivo
       await saveMediaBlob(item.id, blob)
       await deleteMediaBlob(`partial_${item.id}`).catch(() => {})
 
       const localPath = `indexeddb://${item.id}`
-      const playUrl = `blob-store://${item.id}`
+      const playUrl = `/offline-media/${item.id}.mp4`
 
       await markDownloadCompleted(item.id, localPath, playUrl, finalSize)
-      backgroundKeepAlive.release()
+      this.currentDownloadingId = null
+      this.currentChunksRef = []
       this.webAbortControllers.delete(item.id)
       this.isProcessing = false
+      await this.checkAndSyncKeepAlive()
       this.notify()
       this.processQueue()
     } catch (err: any) {
-      backgroundKeepAlive.release()
+      this.currentDownloadingId = null
+      this.currentChunksRef = []
       this.webAbortControllers.delete(item.id)
       if (err.name === 'AbortError') {
         console.log('Download cancelado:', item.id)
@@ -502,13 +567,13 @@ class DownloadManager {
         }
       }
       this.isProcessing = false
+      await this.checkAndSyncKeepAlive()
       this.notify()
       this.processQueue()
     }
   }
 
   public async cancelDownload(id: string): Promise<void> {
-    backgroundKeepAlive.release()
     await deleteMediaBlob(`partial_${id}`).catch(() => {})
     const controller = this.webAbortControllers.get(id)
     if (controller) {
@@ -524,13 +589,15 @@ class DownloadManager {
     if (item && item.status !== 'completed') {
       await deleteDownloadRecord(id)
       this.isProcessing = false
+      await this.checkAndSyncKeepAlive()
       this.notify()
       this.processQueue()
+    } else {
+      await this.checkAndSyncKeepAlive()
     }
   }
 
   public async deleteDownload(id: string): Promise<void> {
-    backgroundKeepAlive.release()
     await deleteMediaBlob(`partial_${id}`).catch(() => {})
     const controller = this.webAbortControllers.get(id)
     if (controller) {
@@ -564,26 +631,33 @@ class DownloadManager {
 
     await deleteDownloadRecord(id)
     this.notify()
+    await this.checkAndSyncKeepAlive()
   }
 
   public async getPlayableUrl(item: DownloadedMedia): Promise<string> {
     // 1. Se for mídia salva no Cache Storage ou IndexedDB (Web / PWA)
-    if (item.playUrl?.startsWith('blob-store://') || item.localPath?.startsWith('indexeddb://')) {
+    if (item.playUrl?.startsWith('blob-store://') || item.playUrl?.startsWith('/offline-media/') || item.localPath?.startsWith('indexeddb://')) {
+      // Prioridade absoluta: URL do Service Worker (/offline-media/...) com suporte a HTTP 206 Range.
+      // No Safari iOS, o AVPlayer FALHA após 6 segundos se usado com blob: URL, pois blobs não respondem a range requests.
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        try {
+          if (!navigator.serviceWorker.controller) {
+            await navigator.serviceWorker.ready
+          }
+        } catch {}
+        return `/offline-media/${item.id}.mp4`
+      }
+
       if (this.activeBlobUrls.has(item.id)) {
         return this.activeBlobUrls.get(item.id)!
       }
 
-      // Cria URL direta de Blob instantânea na memória (carrega em < 50ms)
+      // Fallback para navegadores sem suporte a Service Worker (e.g. aba anônima)
       const blob = await getMediaBlob(item.id)
       if (blob) {
         const blobUrl = URL.createObjectURL(blob)
         this.activeBlobUrls.set(item.id, blobUrl)
         return blobUrl
-      }
-
-      // Se não encontrou no Blob local mas tem Service Worker registrado
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        return `/offline-media/${item.id}.mp4`
       }
     }
 
