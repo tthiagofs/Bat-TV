@@ -54,7 +54,26 @@ export function loadDb(): ProfileDb {
 }
 
 export function saveDb(db: ProfileDb) {
-  localStorage.setItem(DB_KEY, JSON.stringify(db))
+  try {
+    // Sanitiza todos os históricos para garantir que nenhuma imagem base64 exceda o limite de 5MB do localStorage
+    const cleanDb: ProfileDb = {
+      ...db,
+      profiles: (db.profiles || []).map((p) => ({
+        ...p,
+        history: (p.history || []).map((h) => ({
+          ...h,
+          image: h.image?.startsWith('data:') ? '' : (h.image || ''),
+        })),
+        favorites: (p.favorites || []).map((f) => ({
+          ...f,
+          image: f.image?.startsWith('data:') ? '' : (f.image || ''),
+        })),
+      })),
+    }
+    localStorage.setItem(DB_KEY, JSON.stringify(cleanDb))
+  } catch (err) {
+    console.warn('Erro ao salvar profileDb no localStorage (cota excedida ou restrição de armazenamento):', err)
+  }
 }
 
 /** Favoritos globais da versão anterior (usados só para o primeiro perfil criado). */
@@ -78,7 +97,12 @@ export function emptyProfile(name: string, avatar: string, teamKey?: string): Pr
 }
 
 export function pushHistory(list: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
-  return [entry, ...list.filter((h) => h.key !== entry.key)].slice(0, MAX_HISTORY)
+  // Impede que strings base64 gigantescas (posters offline) poluam o profileDb e excedam a cota do localStorage
+  const cleanEntry: HistoryEntry = {
+    ...entry,
+    image: entry.image?.startsWith('data:') ? '' : (entry.image || ''),
+  }
+  return [cleanEntry, ...list.filter((h) => h.key !== cleanEntry.key)].slice(0, MAX_HISTORY)
 }
 
 export function pushSearch(list: string[], q: string): string[] {

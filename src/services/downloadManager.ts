@@ -670,11 +670,32 @@ class DownloadManager {
   public async getPlayableUrl(item: DownloadedMedia): Promise<string> {
     // 1. Se for mídia salva no IndexedDB ou Cache Storage (Web / PWA)
     if (item.playUrl?.startsWith('blob-store://') || item.playUrl?.startsWith('/offline-media/') || item.localPath?.startsWith('indexeddb://')) {
+      // Prioridade 1: Se o navegador tiver Service Worker e Cache Storage disponível, usa rota /offline-media/ com suporte a Range 206
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        try {
+          const cache = await caches.open('bat-tv-media-cache')
+          let cached = await cache.match(`/offline-media/${item.id}.mp4`)
+          if (!cached) {
+            // Se o arquivo estava salvo apenas no IndexedDB, popula no Cache Storage para o SW poder fatiar
+            const blob = await getMediaBlob(item.id)
+            if (blob && blob.size > 0) {
+              await saveMediaBlob(item.id, blob)
+              cached = await cache.match(`/offline-media/${item.id}.mp4`)
+            }
+          }
+          if (cached) {
+            return `/offline-media/${item.id}.mp4`
+          }
+        } catch (cErr) {
+          console.warn('Aviso ao preparar Cache Storage para offline-media:', cErr)
+        }
+      }
+
       if (this.activeBlobUrls.has(item.id)) {
         return this.activeBlobUrls.get(item.id)!
       }
 
-      // Recupera o Blob diretamente do IndexedDB local (100% instantâneo e offline, sem bloqueios de Service Worker)
+      // Fallback para Blob URL caso o Service Worker não esteja disponível
       const blob = await getMediaBlob(item.id)
       if (blob && blob.size > 0) {
         const blobUrl = URL.createObjectURL(blob)

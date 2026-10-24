@@ -55,6 +55,7 @@ export const STREAMING_PROVIDERS: StreamingProvider[] = [
   { id: 119, name: 'Prime Video', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Amazon_Prime_Video_logo.svg/512px-Amazon_Prime_Video_logo.svg.png', network: '1024' },
   { id: 1899, name: 'Max', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Max_logo.svg/512px-Max_logo.svg.png', network: '49|3186' },
   { id: 337, name: 'Disney+', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Disney%2B_logo.svg/512px-Disney%2B_logo.svg.png', network: '2739' },
+  { id: 307, name: 'Globoplay', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Globoplay_logo_2020.svg/512px-Globoplay_logo_2020.svg.png', network: '3290|624' },
 ]
 
 const tmdbCache = new Map<string, { t: number; p: Promise<unknown> }>()

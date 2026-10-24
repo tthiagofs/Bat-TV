@@ -72,7 +72,7 @@ export default function TopStreamingSection() {
           </div>
 
           {/* Seletor de Streamings com Logos Oficiais em SVG */}
-          <div className="flex gap-2 bg-zinc-950/90 p-1.5 rounded-2xl border border-zinc-800 shadow-lg">
+          <div className="flex gap-2 bg-zinc-950/90 p-1.5 rounded-2xl border border-zinc-800 shadow-lg overflow-x-auto no-scrollbar max-w-full">
             {STREAMING_PROVIDERS.map((prov) => {
               const isSel = prov.id === activeProvider.id
               const LogoComp = getProviderLogoComponent(prov.id)

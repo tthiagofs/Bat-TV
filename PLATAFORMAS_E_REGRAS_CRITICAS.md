@@ -80,9 +80,9 @@
    - Fica logo abaixo do Hero Banner vertical.
    - Mostra thumbnail 16:9, botão de Play central translúcido, subtítulo do episódio ou tempo restante e **barra de progresso vermelha** na base.
    - Ao tocar, aciona `play(item, { fromStart: false })` retomando do ponto salvo.
-3. **Seção "Top 10 no Brasil" com 4 Streamings**:
+3. **Seção "Top 10 no Brasil" com 5 Streamings**:
    - Inicia por padrão na **Netflix** (`STREAMING_PROVIDERS[0]`).
-   - Possui barra seletora horizontal compacta com logos oficiais em SVG das 4 plataformas: **Netflix**, **Prime Video**, **Max** e **Disney+**.
+   - Possui barra seletora horizontal compacta com logos oficiais em SVG das 5 plataformas: **Netflix**, **Prime Video**, **Max**, **Disney+** e **Globoplay**.
    - Cards com números gigantes de 1 a 10 estilizados (`text-6xl` com stroke) e pôsteres verticais compactos.
 4. **Proxy CORS**:
    - No navegador web mobile, conexões de IPTV HTTP precisam do proxy (`buildProxyUrl`) para contornar bloqueio de Mixed Content (HTTPS -> HTTP) e restrições de CORS.

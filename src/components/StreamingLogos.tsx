@@ -73,7 +73,42 @@ export function getProviderLogoComponent(providerId: number) {
       return MaxLogo
     case 337:
       return DisneyPlusLogo
+    case 307:
+      return GloboplayLogo
     default:
       return NetflixLogo
   }
 }
+
+/** Logo Oficial Globoplay (Vetor Puro SVG - Círculo com Gradiente Vibrante + Triângulo Play + Tipografia Branca) */
+export const GloboplayLogo: FC<SVGProps<SVGSVGElement>> = (props) => (
+  <svg viewBox="0 0 250 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-5 w-auto" {...props}>
+    <defs>
+      <linearGradient id="globoplay-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#FB0E68" />
+        <stop offset="50%" stopColor="#FF0135" />
+        <stop offset="100%" stopColor="#FF5A00" />
+      </linearGradient>
+    </defs>
+    {/* Círculo com gradiente oficial Globoplay */}
+    <circle cx="28" cy="32" r="24" fill="url(#globoplay-grad)" />
+    {/* Triângulo Play centralizado com cantos harmoniosos */}
+    <path
+      d="M23 21.5 C23 20.3 24.3 19.6 25.3 20.2 L41.5 30.7 C42.4 31.3 42.4 32.7 41.5 33.3 L25.3 43.8 C24.3 44.4 23 43.7 23 42.5 Z"
+      fill="#FFFFFF"
+    />
+    {/* Tipografia oficial 'globoplay' em branco */}
+    <text
+      x="62"
+      y="41"
+      fill="#FFFFFF"
+      fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      fontSize="27"
+      fontWeight="900"
+      letterSpacing="-0.8px"
+    >
+      globoplay
+    </text>
+  </svg>
+)
+

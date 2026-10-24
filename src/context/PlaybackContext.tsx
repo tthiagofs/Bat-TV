@@ -278,7 +278,18 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   const episode = current?.episode
   const onProgress = useCallback((position: number, duration: number) => {
     if (!item || !duration || !isFinite(duration)) return
-    upsertHistory({ ...item, position, duration, updatedAt: Date.now(), episode })
+    try {
+      upsertHistory({
+        ...item,
+        image: item.image?.startsWith('data:') ? '' : (item.image || ''),
+        position,
+        duration,
+        updatedAt: Date.now(),
+        episode,
+      })
+    } catch (err) {
+      console.warn('Erro ao salvar histórico de reprodução:', err)
+    }
   }, [item, episode, upsertHistory])
 
   // Agrupamento de qualidades (FHD, HD, SD, 4K) do mesmo canal ao vivo
@@ -334,7 +345,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         type: 'movies',
         id: Math.abs(opts.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) || 999999,
         name: opts.title,
-        image: opts.poster || '',
+        image: opts.poster?.startsWith('data:') ? '' : (opts.poster || ''),
       }
 
       setCurrent({

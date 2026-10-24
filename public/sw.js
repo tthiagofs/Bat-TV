@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bat-tv-pwa-v9'
+const CACHE_NAME = 'bat-tv-pwa-v10'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -34,12 +34,78 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+/**
+ * Atende requisições de mídia baixada offline (/offline-media/*) com suporte a HTTP 206 Partial Content (Range)
+ * Essencial para que o Safari iOS / WebKit não trave e reproduza vídeos offline com estabilidade.
+ */
+async function handleOfflineMedia(request) {
+  try {
+    const cache = await caches.open('bat-tv-media-cache')
+    const url = new URL(request.url)
+    let response = await cache.match(request) || await cache.match(url.pathname)
+    if (!response) {
+      const filename = url.pathname.split('/').pop()
+      response = await cache.match(`/offline-media/${filename}`)
+    }
+
+    if (!response) {
+      return new Response('Vídeo offline não encontrado', { status: 404 })
+    }
+
+    const rangeHeader = request.headers.get('range')
+    if (!rangeHeader) {
+      return response
+    }
+
+    const blob = await response.blob()
+    const totalSize = blob.size
+
+    const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+    if (!match) {
+      return response
+    }
+
+    const start = parseInt(match[1], 10)
+    let end = match[2] ? parseInt(match[2], 10) : totalSize - 1
+
+    if (start >= totalSize || end >= totalSize || start > end) {
+      return new Response('Range Inválido', {
+        status: 416,
+        headers: { 'Content-Range': `bytes */${totalSize}` }
+      })
+    }
+
+    // Fatia exatamente os bytes solicitados pelo player Safari iOS / Chrome
+    const chunk = blob.slice(start, end + 1, 'video/mp4')
+
+    return new Response(chunk, {
+      status: 206,
+      statusText: 'Partial Content',
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Range': `bytes ${start}-${end}/${totalSize}`,
+        'Content-Length': String(chunk.size),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000'
+      }
+    })
+  } catch (err) {
+    console.error('Erro ao servir mídia offline via SW:', err)
+    return new Response('Erro ao ler mídia offline', { status: 500 })
+  }
+}
+
 // Interceptação de requisições
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
 
-  // 1. Não intercepta streams de vídeo ao vivo remotos, proxies ou APIs externas (permite streaming HTTP nativo instantâneo)
   if (event.request.method !== 'GET') return
+
+  // 1. Intercepta imediatamente mídias baixadas offline (/offline-media/*)
+  if (url.pathname.startsWith('/offline-media/')) {
+    event.respondWith(handleOfflineMedia(event.request))
+    return
+  }
   if (
     event.request.destination === 'video' ||
     event.request.destination === 'audio' ||
