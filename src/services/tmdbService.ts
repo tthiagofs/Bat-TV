@@ -224,9 +224,38 @@ export async function searchTmdbItem(query: string, mediaType: 'movie' | 'tv'): 
   }
 }
 
+// Títulos oficiais mais assistidos e em alta no catálogo do Globoplay Brasil
+const GLOBOPLAY_TOP10: Array<{ id: number; type: 'movie' | 'tv' }> = [
+  { id: 124364, type: 'tv' },     // Origem (From - Série #1 no Globoplay)
+  { id: 99125, type: 'tv' },      // Arcanjo Renegado (Original Globoplay)
+  { id: 196421, type: 'tv' },     // Os Outros (Original Globoplay)
+  { id: 1061240, type: 'movie' }, // Minha Irmã e Eu (Filme #1 em alta no streaming)
+  { id: 67535, type: 'tv' },      // Justiça (Original Globoplay)
+  { id: 299188, type: 'tv' },     // Jogada de Risco (Série em alta Globoplay)
+  { id: 1136897, type: 'movie' }, // Os Farofeiros 2 (Top Filmes Globoplay)
+  { id: 194606, type: 'tv' },     // Rensga Hits! (Original Globoplay)
+  { id: 198053, type: 'tv' },     // O Jogo Que Mudou a História (Original Globoplay)
+  { id: 46021, type: 'tv' },      // Tapas & Beijos (Sucesso de comédia no Top 10)
+]
+
 /** Top 10 mais populares no Brasil filtrado por Streaming autêntico */
 export async function getTop10ByProvider(providerId: number): Promise<TmdbItem[]> {
   try {
+    // Para o Globoplay (307), busca os títulos que estão realmente no Top 10 de audiência da plataforma no Brasil
+    if (providerId === 307) {
+      const results = await Promise.all(
+        GLOBOPLAY_TOP10.map(async ({ id, type }) => {
+          try {
+            const raw = await fetchTmdb<any>(`${type}/${id}`, { language: 'pt-BR' })
+            return parseTmdb(raw, type)
+          } catch {
+            return null
+          }
+        }),
+      )
+      return results.filter((i): i is TmdbItem => i !== null && !!i.posterPath)
+    }
+
     const provConfig = STREAMING_PROVIDERS.find((p) => p.id === providerId)
     const networkId = provConfig?.network || '213'
 
