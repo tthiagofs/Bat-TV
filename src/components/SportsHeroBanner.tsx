@@ -111,23 +111,40 @@ function SportsHeroBannerBase({ matches }: Props) {
       const targets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
       const matched = findAllMatchingLiveChannels(liveList, targets)
 
+      // Filtra playlist apenas para esportes para não sobrecarregar o player na TV com 10.000 canais
+      const sportsPlaylist = liveList.filter((ch: any) => {
+        const n = (ch.name || '').toLowerCase()
+        const g = (ch.group || ch.category_id || '').toLowerCase()
+        return (
+          g.includes('sport') || g.includes('esport') || g.includes('futebol') || g.includes('premiere') || g.includes('espn') || g.includes('combate') ||
+          n.includes('sport') || n.includes('esport') || n.includes('espn') || n.includes('premiere') || n.includes('disney') || n.includes('dazn') || n.includes('caze') || n.includes('band') || n.includes('globo') || n.includes('sbt') || n.includes('tnt') || n.includes('space')
+        )
+      })
+      const effectivePlaylist = sportsPlaylist.length > 0 ? sportsPlaylist : liveList.slice(0, 150)
+
+      const matchContext = {
+        leagueId: current.leagueId,
+        matchId: current.id,
+        leagueName: current.league,
+      }
+
       if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
         setPickerData({
           match: current,
           options: matched,
-          liveList,
+          liveList: effectivePlaylist,
         })
         return
       }
 
       if (matched.length === 1) {
-        play(matched[0].channel, { playlist: liveList })
+        play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
         return
       }
 
       const found = findBestLiveChannel(liveList, targets)
       if (found) {
-        play(found, { playlist: liveList })
+        play(found, { playlist: effectivePlaylist, matchContext })
       } else {
         alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
@@ -262,7 +279,7 @@ function SportsHeroBannerBase({ matches }: Props) {
               </div>
             </div>
 
-            {/* Escudos Compactos no Mobile */}
+            {/* Escudos Compactos no Mobile e TV */}
             <div className="flex lg:hidden items-center gap-3 py-0.5">
               <div className="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-md">
                 <div className="w-7 h-7 flex items-center justify-center shrink-0">
@@ -273,7 +290,13 @@ function SportsHeroBannerBase({ matches }: Props) {
                   )}
                 </div>
                 <span className="text-xs font-bold text-white truncate max-w-[85px]">{current.home}</span>
-                <span className="text-xs font-black text-zinc-400">vs</span>
+                {isLive && current.homeScore !== null && current.awayScore !== null ? (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white font-mono text-xs font-black shadow-md shadow-rose-950/60">
+                    {current.homeScore} - {current.awayScore}
+                  </span>
+                ) : (
+                  <span className="text-xs font-black text-zinc-400">vs</span>
+                )}
                 <div className="w-7 h-7 flex items-center justify-center shrink-0">
                   {current.awayBadge ? (
                     <img src={current.awayBadge} alt={current.away} className="w-full h-full object-contain filter drop-shadow" />
@@ -294,7 +317,12 @@ function SportsHeroBannerBase({ matches }: Props) {
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-0.5">
               {isLive ? (
                 <span className="flex items-center gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-rose-600 text-white font-black text-[11px] sm:text-xs uppercase animate-pulse shadow-lg shadow-rose-950/60">
-                  <Radio size={12} /> {countdownText || 'AO VIVO AGORA'}
+                  <Radio size={12} />
+                  {current.homeScore !== null && current.awayScore !== null ? (
+                    <span>{current.homeScore} x {current.awayScore} · {countdownText || 'AO VIVO'}</span>
+                  ) : (
+                    <span>{countdownText || 'AO VIVO AGORA'}</span>
+                  )}
                 </span>
               ) : countdownText ? (
                 <span className="flex items-center gap-1.5 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-amber-500 text-zinc-950 font-black text-[11px] sm:text-xs uppercase shadow-md shadow-amber-500/30">
@@ -575,8 +603,16 @@ function SportsHeroBannerBase({ matches }: Props) {
           options={pickerData.options}
           onSelectChannel={(ch) => {
             const list = pickerData.liveList
+            const match = pickerData.match
             setPickerData(null)
-            play(ch, { playlist: list })
+            play(ch, {
+              playlist: list,
+              matchContext: {
+                leagueId: match.leagueId,
+                matchId: match.id,
+                leagueName: match.league,
+              },
+            })
           }}
           onClose={() => setPickerData(null)}
         />

@@ -84,19 +84,19 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'eng.1',
     name: 'Premier League',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/23.png',
-    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
+    tv: ['ESPN 4', 'Disney+', 'ESPN', 'ESPN 2'],
   },
   'esp.1': {
     slug: 'esp.1',
     name: 'La Liga',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/15.png',
-    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
+    tv: ['ESPN 4', 'Disney+', 'ESPN', 'ESPN 2'],
   },
   'ita.1': {
     slug: 'ita.1',
     name: 'Serie A (Itália)',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/12.png',
-    tv: ['ESPN', 'ESPN 2', 'ESPN 4'],
+    tv: ['ESPN 4', 'Disney+', 'ESPN', 'ESPN 2'],
   },
   'ger.1': {
     slug: 'ger.1',
@@ -346,6 +346,82 @@ export function getMatchDedupeKey(home: string, away: string, timestamp: number)
   return `${matchup}-${dateStr}`
 }
 
+function normalizeBroadcastName(raw: string): string | null {
+  if (!raw) return null
+  const s = raw.trim()
+  const low = s.toLowerCase()
+
+  if (low.includes('disney') || low.includes('star+') || low.includes('star plus')) return 'Disney+'
+  if (low.includes('caze') || low.includes('cazé')) return 'CazéTV'
+  if (low.includes('goat')) return 'Canal GOAT'
+  if (low.includes('paramount')) return 'Paramount+'
+  if (low.includes('prime')) return 'Prime Video'
+  if (low.includes('max') || low.includes('hbo')) return 'Max'
+  if (low.includes('tnt')) return 'TNT'
+  if (low.includes('space')) return 'Space'
+  if (low.includes('premiere')) {
+    const num = low.match(/\b([2-9]|clubes?)\b/)
+    return num ? `Premiere ${num[1] === 'clube' || num[1] === 'clubes' ? 'Clubes' : num[1]}` : 'Premiere'
+  }
+  if (low.includes('sportv') || low.includes('spor tv')) {
+    const num = low.match(/\b([2-4])\b/)
+    return num ? `SporTV ${num[1]}` : 'SporTV'
+  }
+  if (low.includes('espn')) {
+    if (low.includes('extra')) return 'ESPN Extra'
+    const num = low.match(/\b([2-6])\b/)
+    return num ? `ESPN ${num[1]}` : 'ESPN'
+  }
+  if (low.includes('globo') && !low.includes('news')) return 'Globo'
+  if (low.includes('record') && !low.includes('news')) return 'Record TV'
+  if (low.includes('sbt')) return 'SBT'
+  if (low.includes('bandsports')) return 'BandSports'
+  if (low.includes('band')) return 'Band'
+
+  return null
+}
+
+function extractEspnBroadcasts(comp: Json): string[] {
+  const detected: string[] = []
+
+  // 1. Checa comp.geoBroadcasts (transmissões geo-localizadas)
+  if (Array.isArray(comp.geoBroadcasts)) {
+    for (const gb of comp.geoBroadcasts) {
+      const name = gb?.media?.shortName || gb?.media?.name
+      if (typeof name === 'string') {
+        const norm = normalizeBroadcastName(name)
+        if (norm && !detected.includes(norm)) {
+          const region = (gb?.region || '').toLowerCase()
+          const lang = (gb?.lang || '').toLowerCase()
+          if (region === 'br' || lang === 'pt' || lang === 'por') {
+            detected.unshift(norm)
+          } else {
+            detected.push(norm)
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Checa comp.broadcasts tradicional
+  if (Array.isArray(comp.broadcasts)) {
+    for (const b of comp.broadcasts) {
+      if (Array.isArray(b?.names)) {
+        for (const n of b.names) {
+          if (typeof n === 'string') {
+            const norm = normalizeBroadcastName(n)
+            if (norm && !detected.includes(norm)) {
+              detected.push(norm)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return detected
+}
+
 /** Converte um evento nativo da API ESPN para a interface universal Match */
 function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
   if (!event || !event.competitions || !event.competitions[0]) return null
@@ -412,7 +488,6 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
   } else if (leagueSlug === 'uefa.champions') {
     channels = ['TNT', 'Space', 'Max']
   } else if (leagueSlug === 'uefa.europa') {
-    // Na Europa League no Brasil, CazéTV transmite apenas 1 ou 2 jogos de grande destaque por rodada
     const isMarqueeEuropaMatch =
       homeLower.includes('united') || awayLower.includes('united') ||
       homeLower.includes('roma') || awayLower.includes('roma') ||
@@ -429,10 +504,9 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     if (isMarqueeEuropaMatch) {
       channels = ['CazéTV', 'ESPN']
     } else {
-      channels = ['ESPN', 'ESPN 2', 'ESPN 4']
+      channels = ['ESPN 4', 'Disney+', 'ESPN', 'ESPN 2']
     }
   } else if (leagueSlug === 'conmebol.sudamericana') {
-    // Na Copa Sul-Americana no Brasil, os jogos principais de TV aberta/streaming pertencem a SBT e Paramount+
     if (isVasco || homeLower.includes('corinthians') || awayLower.includes('corinthians') || homeLower.includes('fortaleza') || awayLower.includes('fortaleza') || homeLower.includes('cruzeiro') || awayLower.includes('cruzeiro')) {
       channels = ['SBT', 'Paramount+', 'ESPN']
     } else {
@@ -443,7 +517,6 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
   } else if (leagueSlug === 'bra.copa_do_brazil') {
     channels = ['SporTV', 'Premiere', 'Prime Video', 'Globo']
   } else if (leagueSlug === 'bra.1') {
-    // Mandantes da LFU têm transmissão aberta/digital na Record TV e CazéTV além do Premiere
     const isLfuHost =
       homeLower.includes('corinthians') ||
       homeLower.includes('cruzeiro') ||
@@ -463,6 +536,17 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     }
   }
 
+  // 3. Mescla com os canais reais detectados diretamente da API da ESPN
+  const apiBroadcasts = extractEspnBroadcasts(comp)
+  if (apiBroadcasts.length > 0) {
+    channels = Array.from(new Set([...apiBroadcasts, ...channels]))
+  }
+
+  // 4. Premier League sempre inclui Disney+
+  if (leagueSlug === 'eng.1' && !channels.includes('Disney+')) {
+    channels.push('Disney+')
+  }
+
   const ts = event.date ? Date.parse(event.date) : Date.now()
 
   return {
@@ -480,6 +564,21 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     status,
     statusDetail: statusType.detail || statusType.shortDetail || (status === 'LIVE' ? 'Ao Vivo' : undefined),
     channels,
+  }
+}
+
+/** Busca partidas ao vivo de uma liga específica para alertas de gol simultâneos */
+export async function getLeagueLiveMatches(leagueSlug: string): Promise<Match[]> {
+  if (!leagueSlug) return []
+  try {
+    const data = await fetchEspnJson<{ events?: Json[] }>(
+      `${ESPN_BASE}/${leagueSlug}/scoreboard`,
+      30_000 // Cache curto de 30s para atualizar gols rapidamente
+    )
+    const events = data?.events || []
+    return events.map((e) => parseEspnEvent(e, leagueSlug)).filter((m): m is Match => m !== null)
+  } catch {
+    return []
   }
 }
 

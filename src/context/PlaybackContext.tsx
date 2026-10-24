@@ -13,6 +13,12 @@ import { searchTitleInCatalog } from '../services/catalog'
 interface PlayOpts {
   /** Lista usada na troca rápida de canais (ao vivo) */
   playlist?: MediaItem[]
+  /** Metadados do jogo/campeonato para alerta de gols simultâneos */
+  matchContext?: {
+    leagueId?: string
+    matchId?: string
+    leagueName?: string
+  }
   /** Ignora o ponto de retomada salvo */
   fromStart?: boolean
   /** Temporada alvo específica (para séries) */
@@ -31,6 +37,11 @@ interface Current {
   startAt: number
   episode?: HistoryEntry['episode']
   allEpisodes?: Array<{ id: string; ext: string; title: string }>
+  matchContext?: {
+    leagueId?: string
+    matchId?: string
+    leagueName?: string
+  }
 }
 
 interface PlaybackValue {
@@ -108,7 +119,14 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     if (activeItem.type === 'live') {
       setPlaylist(opts.playlist ?? [])
       upsertHistory({ ...activeItem, position: 0, duration: 0, updatedAt: Date.now() })
-      setCurrent({ item: activeItem, url: service.liveUrl(activeItem.id, 'm3u8'), title: activeItem.name, isLive: true, startAt: 0 })
+      setCurrent({
+        item: activeItem,
+        url: service.liveUrl(activeItem.id, 'm3u8'),
+        title: activeItem.name,
+        isLive: true,
+        startAt: 0,
+        matchContext: opts.matchContext,
+      })
       setOpeningMediaTitle(null)
       return
     }
@@ -411,6 +429,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               nextEpisodeTitle={nextEpisodeTitle}
               channelVariants={channelVariants}
               channelsList={live}
+              matchContext={current.matchContext}
               onSelectChannel={(ch) => play(ch, { playlist })}
             />
           ) : (
@@ -431,6 +450,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               nextEpisodeTitle={nextEpisodeTitle}
               channelVariants={channelVariants}
               channelsList={live}
+              matchContext={current.matchContext}
               onSelectChannel={(ch) => play(ch, { playlist })}
             />
           )}

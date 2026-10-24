@@ -131,21 +131,39 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
       const liveList = await getItems(service, 'live', 'all')
       const targets = match.channels && match.channels.length > 0 ? match.channels : [channel, 'SporTV']
       const matched = findAllMatchingLiveChannels(liveList, targets)
+
+      // Filtra playlist apenas para esportes para não sobrecarregar o player na TV com 10.000 canais
+      const sportsPlaylist = liveList.filter((ch: any) => {
+        const n = (ch.name || '').toLowerCase()
+        const g = (ch.group || ch.category_id || '').toLowerCase()
+        return (
+          g.includes('sport') || g.includes('esport') || g.includes('futebol') || g.includes('premiere') || g.includes('espn') || g.includes('combate') ||
+          n.includes('sport') || n.includes('esport') || n.includes('espn') || n.includes('premiere') || n.includes('disney') || n.includes('dazn') || n.includes('caze') || n.includes('band') || n.includes('globo') || n.includes('sbt') || n.includes('tnt') || n.includes('space')
+        )
+      })
+      const effectivePlaylist = sportsPlaylist.length > 0 ? sportsPlaylist : liveList.slice(0, 150)
+
+      const matchContext = {
+        leagueId: match.leagueId,
+        matchId: match.id,
+        leagueName: match.league,
+      }
+
       if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
         setPickerData({
           match,
           options: matched,
-          liveList,
+          liveList: effectivePlaylist,
         })
         return
       }
       if (matched.length === 1) {
-        play(matched[0].channel, { playlist: liveList })
+        play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
         return
       }
       const found = findBestLiveChannel(liveList, targets)
       if (found) {
-        play(found, { playlist: liveList })
+        play(found, { playlist: effectivePlaylist, matchContext })
       } else {
         alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
@@ -296,8 +314,16 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
           options={pickerData.options}
           onSelectChannel={(ch) => {
             const list = pickerData.liveList
+            const matchSelected = pickerData.match
             setPickerData(null)
-            play(ch, { playlist: list })
+            play(ch, {
+              playlist: list,
+              matchContext: {
+                leagueId: matchSelected.leagueId,
+                matchId: matchSelected.id,
+                leagueName: matchSelected.league,
+              },
+            })
           }}
           onClose={() => setPickerData(null)}
         />

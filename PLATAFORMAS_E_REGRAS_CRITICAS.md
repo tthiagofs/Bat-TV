@@ -121,6 +121,28 @@
 
 ---
 
+## ⚽ HUB DE ESPORTES E TRANSIÇÃO PARA TV (FIRE TV STICK)
+
+### 📌 Regras de Navegação e Performance no Hub de Esportes:
+1. **Modal de Seleção de Canais (`SportsChannelPickerModal.tsx`)**:
+   - Navegação D-pad estritamente vertical entre as opções de canais (`button[data-channel-option="true"]`).
+   - Botão fechar (X) marcado com `tabIndex={-1}` para não ser atingido por engano no D-pad (fechamento é feito pelo botão Voltar do controle).
+   - Sem salto circular infinito: ao chegar no último canal para baixo, permanece no último; ao chegar no primeiro para cima, permanece no primeiro.
+   - Sempre executa `scrollIntoView({ block: 'nearest', behavior: 'smooth' })` para manter o canal focado na tela visível.
+
+2. **Otimização Crítica de Canais ao Abrir Jogo pelo Hub de Esportes**:
+   - **NUNCA passar a lista bruta com 10.000 canais IPTV** no parâmetro `playlist` do `play()`. Isso fazia o menu de canais (QuickZap) travar o hardware do Fire TV Stick por sobrecarga de nós DOM.
+   - A lista de canais transmitidos deve ser filtrada para canais esportivos (`effectivePlaylist`) antes de enviar ao Player.
+   - Tanto em `Player.tsx` quanto em `PwaPlayer.tsx`, a lista do QuickZap possui um limitador de segurança `.slice(0, 100)` para garantir renderização instantânea sem congelamento.
+
+3. **Alerta de Gols Simultâneos do Mesmo Campeonato (`GoalNotificationBanner.tsx`)**:
+   - Ao reproduzir uma partida ao vivo pelo Hub de Esportes, é passado `matchContext` contendo `leagueId`, `matchId` e `leagueName`.
+   - Consulta a API da ESPN a cada 45 segundos em segundo plano (baixíssimo consumo de CPU/memória para Smart TVs).
+   - Quando sai gol em outro jogo do mesmo campeonato, um banner flutuante discreto e moderno surge no canto da tela por exatamente 5 segundos e desaparece automaticamente.
+   - Não dispara alerta para gols da partida que o usuário já está assistindo na tela.
+
+---
+
 ## 🔒 TABELA RÁPIDA DE DECISÃO (CHECKLIST PARA AGENTES E DEVS)
 
 | Plataforma | Player Utilizado | Som / Autoplay | Layout de Vídeo | Proxy de Vídeo? |

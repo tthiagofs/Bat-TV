@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { EpgEntry } from '../services/xtreamService'
 import type { MediaItem } from '../types'
+import GoalNotificationBanner from './GoalNotificationBanner'
 
 export interface ChannelQualityVariant {
   name: string
@@ -45,6 +46,12 @@ interface Props {
   /** Lista de canais da categoria para Guia Rápido / Mini-EPG (Quick Zap) */
   channelsList?: MediaItem[]
   onSelectChannel?: (item: MediaItem) => void
+  /** Contexto da partida / campeonato para notificações de gol simultâneo na TV */
+  matchContext?: {
+    leagueId?: string
+    matchId?: string
+    leagueName?: string
+  }
 }
 
 type Aspect = 'contain' | 'cover'
@@ -111,6 +118,7 @@ export default function PwaPlayer({
   channelVariants,
   channelsList = [],
   onSelectChannel,
+  matchContext,
 }: Props) {
   const isNative = useMemo(() => Capacitor.isNativePlatform(), [])
 
@@ -2215,6 +2223,7 @@ export default function PwaPlayer({
           <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1">
             {channelsList
               .filter((ch) => !quickZapFilter || ch.name.toLowerCase().includes(quickZapFilter.toLowerCase()))
+              .slice(0, 100)
               .map((ch, idx) => {
                 const isCurrent = ch.name === title || (channelLabel && channelLabel.includes(ch.name))
                 return (
@@ -2352,6 +2361,9 @@ export default function PwaPlayer({
           </div>
         </div>
       )}
+
+      {/* Notificação flutuante de Gol simultâneo na TV */}
+      <GoalNotificationBanner matchContext={matchContext} />
     </div>
   )
 }

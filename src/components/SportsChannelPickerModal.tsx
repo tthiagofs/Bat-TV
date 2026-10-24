@@ -48,7 +48,7 @@ export default function SportsChannelPickerModal({
       }
 
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const buttons = modalRef.current?.querySelectorAll<HTMLButtonElement>('button')
+        const buttons = modalRef.current?.querySelectorAll<HTMLButtonElement>('button[data-channel-option="true"]')
         if (!buttons || buttons.length === 0) return
 
         const btnArray = Array.from(buttons)
@@ -56,12 +56,18 @@ export default function SportsChannelPickerModal({
 
         if (e.key === 'ArrowDown') {
           e.preventDefault()
-          const nextIdx = currentIdx < btnArray.length - 1 ? currentIdx + 1 : 0
-          btnArray[nextIdx]?.focus()
+          e.stopPropagation()
+          const nextIdx = currentIdx === -1 ? 0 : Math.min(btnArray.length - 1, currentIdx + 1)
+          const target = btnArray[nextIdx]
+          target?.focus()
+          target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
         } else if (e.key === 'ArrowUp') {
           e.preventDefault()
-          const prevIdx = currentIdx > 0 ? currentIdx - 1 : btnArray.length - 1
-          btnArray[prevIdx]?.focus()
+          e.stopPropagation()
+          const prevIdx = currentIdx === -1 ? 0 : Math.max(0, currentIdx - 1)
+          const target = btnArray[prevIdx]
+          target?.focus()
+          target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
         }
       }
     }
@@ -93,7 +99,7 @@ export default function SportsChannelPickerModal({
             type="button"
             onClick={onClose}
             aria-label="Fechar seleção de canal"
-            tabIndex={0}
+            tabIndex={-1}
             className="absolute top-4 right-4 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-zinc-300 hover:text-white transition cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500 active:scale-90 touch-manipulation"
           >
             <X size={20} />
@@ -159,6 +165,7 @@ export default function SportsChannelPickerModal({
                 key={opt.channel.id}
                 ref={idx === 0 ? firstButtonRef : undefined}
                 type="button"
+                data-channel-option="true"
                 tabIndex={0}
                 onClick={() => onSelectChannel(opt.channel)}
                 className="w-full group flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-zinc-900/90 hover:bg-rose-600/20 active:bg-rose-600/30 border border-white/10 hover:border-rose-500/80 transition-all cursor-pointer text-left focus:outline-none focus:ring-4 focus:ring-rose-500 active:scale-[0.98] touch-manipulation"

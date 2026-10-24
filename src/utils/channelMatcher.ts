@@ -30,6 +30,7 @@ const CHANNEL_ALIASES: Record<string, string[]> = {
   'prime video': ['prime video', 'amazon prime', 'prime'],
   'paramount+': ['paramount+', 'paramount'],
   goat: ['canal goat', 'goat'],
+  'disney+': ['disney+', 'disney plus', 'disney', 'star+', 'star plus'],
 }
 
 /**
@@ -180,29 +181,43 @@ export function findAllMatchingLiveChannels(
   for (const raw of cleanedTargets) {
     const low = raw.toLowerCase()
 
+    const hasSpecificSubchannel = /\b([2-9]|extra)\b/i.test(low)
+
     if (low.includes('espn')) {
-      subTargets.push(
-        { displayGroup: 'ESPN', searchTarget: 'espn' },
-        { displayGroup: 'ESPN 2', searchTarget: 'espn 2' },
-        { displayGroup: 'ESPN 3', searchTarget: 'espn 3' },
-        { displayGroup: 'ESPN 4', searchTarget: 'espn 4' },
-        { displayGroup: 'ESPN 5', searchTarget: 'espn 5' },
-        { displayGroup: 'ESPN 6', searchTarget: 'espn 6' }
-      )
+      if (hasSpecificSubchannel) {
+        subTargets.push({ displayGroup: raw, searchTarget: low })
+      } else {
+        subTargets.push(
+          { displayGroup: 'ESPN', searchTarget: 'espn' },
+          { displayGroup: 'ESPN 2', searchTarget: 'espn 2' },
+          { displayGroup: 'ESPN 3', searchTarget: 'espn 3' },
+          { displayGroup: 'ESPN 4', searchTarget: 'espn 4' },
+          { displayGroup: 'ESPN 5', searchTarget: 'espn 5' },
+          { displayGroup: 'ESPN 6', searchTarget: 'espn 6' }
+        )
+      }
     } else if (low.includes('premiere')) {
-      subTargets.push(
-        { displayGroup: 'Premiere Clubes', searchTarget: 'premiere' },
-        { displayGroup: 'Premiere 2', searchTarget: 'premiere 2' },
-        { displayGroup: 'Premiere 3', searchTarget: 'premiere 3' },
-        { displayGroup: 'Premiere 4', searchTarget: 'premiere 4' },
-        { displayGroup: 'Premiere 5', searchTarget: 'premiere 5' }
-      )
+      if (hasSpecificSubchannel) {
+        subTargets.push({ displayGroup: raw, searchTarget: low })
+      } else {
+        subTargets.push(
+          { displayGroup: 'Premiere Clubes', searchTarget: 'premiere' },
+          { displayGroup: 'Premiere 2', searchTarget: 'premiere 2' },
+          { displayGroup: 'Premiere 3', searchTarget: 'premiere 3' },
+          { displayGroup: 'Premiere 4', searchTarget: 'premiere 4' },
+          { displayGroup: 'Premiere 5', searchTarget: 'premiere 5' }
+        )
+      }
     } else if (low.includes('sportv') || low.includes('spor tv')) {
-      subTargets.push(
-        { displayGroup: 'SporTV', searchTarget: 'sportv' },
-        { displayGroup: 'SporTV 2', searchTarget: 'sportv 2' },
-        { displayGroup: 'SporTV 3', searchTarget: 'sportv 3' }
-      )
+      if (hasSpecificSubchannel) {
+        subTargets.push({ displayGroup: raw, searchTarget: low })
+      } else {
+        subTargets.push(
+          { displayGroup: 'SporTV', searchTarget: 'sportv' },
+          { displayGroup: 'SporTV 2', searchTarget: 'sportv 2' },
+          { displayGroup: 'SporTV 3', searchTarget: 'sportv 3' }
+        )
+      }
     } else if (low.includes('caze') || low.includes('cazé')) {
       subTargets.push({ displayGroup: 'CazéTV', searchTarget: 'cazetv' })
     } else if (low.includes('record')) {
@@ -231,6 +246,8 @@ export function findAllMatchingLiveChannels(
       subTargets.push({ displayGroup: 'Paramount+', searchTarget: 'paramount+' })
     } else if (low.includes('goat')) {
       subTargets.push({ displayGroup: 'Canal GOAT', searchTarget: 'goat' })
+    } else if (low.includes('disney') || low.includes('star+')) {
+      subTargets.push({ displayGroup: 'Disney+', searchTarget: 'disney+' })
     } else {
       subTargets.push({ displayGroup: raw, searchTarget: low })
     }
