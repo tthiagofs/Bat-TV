@@ -27,6 +27,12 @@ export interface Match {
   status?: string // 'NS' (não iniciado), 'FT' (finalizado), '1H'/'2H'/'LIVE'/'HT' (ao vivo)
   statusDetail?: string // e.g. "73'", "HT", "FT"
   channels?: string[]
+  /** Emissora exata confirmada da transmissão (ex: "ESPN 2", "Premiere 2", "CazéTV") */
+  broadcaster?: string
+  /** Lista de emissoras exatas se houver mais de uma transmissão oficial (ex: ["ESPN 4", "Disney+"]) */
+  broadcasters?: string[]
+  /** Indica se a partida tem emissora exata mapeada para ir direto no canal */
+  hasExactBroadcast?: boolean
 }
 
 export interface TeamData {
@@ -536,15 +542,44 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     }
   }
 
-  // 3. Mescla com os canais reais detectados diretamente da API da ESPN
+  // 3. Emissoras detectadas diretamente da API da ESPN (geoBroadcasts e broadcasts)
   const apiBroadcasts = extractEspnBroadcasts(comp)
+  let exactBroadcasters: string[] = []
+  let hasExactBroadcast = false
+
   if (apiBroadcasts.length > 0) {
-    channels = Array.from(new Set([...apiBroadcasts, ...channels]))
+    exactBroadcasters = [...apiBroadcasts]
+    hasExactBroadcast = true
   }
 
-  // 4. Premier League sempre inclui Disney+
-  if (leagueSlug === 'eng.1' && !channels.includes('Disney+')) {
-    channels.push('Disney+')
+  // 4. Regras específicas com emissoras exatas por liga e clube
+  if (leagueSlug === 'eng.1') {
+    // Premier League: No Brasil, a Disney possui todos os direitos. Sempre no Disney+ e jogos de TV na ESPN / ESPN 4
+    if (!exactBroadcasters.includes('Disney+')) {
+      exactBroadcasters.push('Disney+')
+    }
+    if (!exactBroadcasters.some((b) => b.startsWith('ESPN'))) {
+      exactBroadcasters.unshift('ESPN 4')
+    }
+    hasExactBroadcast = true
+  } else if (leagueSlug === 'esp.1') {
+    if (exactBroadcasters.length === 0) {
+      exactBroadcasters = ['ESPN', 'Disney+']
+      hasExactBroadcast = true
+    }
+  } else if (leagueSlug === 'uefa.champions') {
+    if (exactBroadcasters.length === 0) {
+      exactBroadcasters = ['TNT', 'Max']
+      hasExactBroadcast = true
+    }
+  } else if (isCruzeiro) {
+    exactBroadcasters = ['SporTV', 'Premiere']
+    hasExactBroadcast = true
+  }
+
+  // Se houver emissora exata confirmada, channels recebe ESTRITAMENTE as emissoras exatas (sem poluir com canais genéricos)
+  if (hasExactBroadcast && exactBroadcasters.length > 0) {
+    channels = exactBroadcasters
   }
 
   const ts = event.date ? Date.parse(event.date) : Date.now()
@@ -564,6 +599,9 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     status,
     statusDetail: statusType.detail || statusType.shortDetail || (status === 'LIVE' ? 'Ao Vivo' : undefined),
     channels,
+    broadcaster: exactBroadcasters[0] || channels[0],
+    broadcasters: exactBroadcasters.length > 0 ? exactBroadcasters : channels,
+    hasExactBroadcast,
   }
 }
 
@@ -609,6 +647,11 @@ export function mergeMatches(base: Match, incoming: Match): Match {
       : base.channels && base.channels.length > 0
         ? base.channels
         : incoming.channels,
+    broadcaster: base.broadcaster || incoming.broadcaster || (base.broadcasters?.[0]) || (incoming.broadcasters?.[0]),
+    broadcasters: (base.broadcasters && base.broadcasters.length > 0)
+      ? base.broadcasters
+      : (incoming.broadcasters && incoming.broadcasters.length > 0 ? incoming.broadcasters : base.channels || incoming.channels),
+    hasExactBroadcast: base.hasExactBroadcast ?? incoming.hasExactBroadcast ?? false,
   }
 }
 

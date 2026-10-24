@@ -5,6 +5,7 @@ import { usePlayback } from '../context/PlaybackContext'
 import { useAuth } from '../context/AuthContext'
 import { getItems } from '../services/catalog'
 import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
+import { findExactChannelForBroadcaster } from '../utils/broadcasterMapper'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
 
@@ -73,7 +74,7 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
     liveList: MediaItem[]
   } | null>(null)
 
-  const channel = match.channels?.[0] || 'SporTV'
+  const channel = match.broadcaster || match.channels?.[0] || 'SporTV'
   const leftGradient = getTeamGradient(match.home, 'left')
   const rightGradient = getTeamGradient(match.away, 'right')
 
@@ -129,8 +130,6 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
 
     try {
       const liveList = await getItems(service, 'live', 'all')
-      const targets = match.channels && match.channels.length > 0 ? match.channels : [channel, 'SporTV']
-      const matched = findAllMatchingLiveChannels(liveList, targets)
 
       // Filtra playlist apenas para esportes para não sobrecarregar o player na TV com 10.000 canais
       const sportsPlaylist = liveList.filter((ch: any) => {
@@ -149,23 +148,60 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
         leagueName: match.league,
       }
 
-      if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
+      // 1. Prioridade Máxima: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2)
+      const exactTargets = match.broadcasters && match.broadcasters.length > 0
+        ? match.broadcasters
+        : (match.broadcaster ? [match.broadcaster] : [])
+
+      if (exactTargets.length === 1) {
+        // Se houver 1 canal exato mapeado: pula a escolha e abre o player DIRETO no canal correto!
+        const exactChannel = findExactChannelForBroadcaster(liveList, exactTargets[0])
+        if (exactChannel) {
+          play(exactChannel, { playlist: effectivePlaylist, matchContext })
+          return
+        }
+      } else if (exactTargets.length > 1) {
+        // Se houver duas ou mais opções oficiais específicas (ex: ESPN e Disney+, ou Globo e Premiere):
+        const matched = findAllMatchingLiveChannels(liveList, exactTargets)
+        if (matched.length === 1) {
+          // Se o usuário só possui 1 dessas opções no IPTV, abre direto sem perguntar!
+          play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
+          return
+        }
+        if (matched.length > 1) {
+          // Se possui mais de uma, abre o modal limpo contendo APENAS as emissoras específicas desse jogo
+          setPickerData({
+            match,
+            options: matched,
+            liveList: effectivePlaylist,
+          })
+          return
+        }
+      }
+
+      // 2. Fallback Inteligente: Canais associados à partida/liga se o canal exato não foi achado
+      const fallbackTargets = match.channels && match.channels.length > 0 ? match.channels : [channel, 'SporTV']
+      const fallbackMatched = findAllMatchingLiveChannels(liveList, fallbackTargets)
+
+      if (fallbackMatched.length === 1) {
+        play(fallbackMatched[0].channel, { playlist: effectivePlaylist, matchContext })
+        return
+      }
+
+      if (fallbackMatched.length > 1) {
         setPickerData({
           match,
-          options: matched,
+          options: fallbackMatched,
           liveList: effectivePlaylist,
         })
         return
       }
-      if (matched.length === 1) {
-        play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
-        return
-      }
-      const found = findBestLiveChannel(liveList, targets)
+
+      const found = findBestLiveChannel(liveList, fallbackTargets)
       if (found) {
         play(found, { playlist: effectivePlaylist, matchContext })
       } else {
-        alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
+        alert(`Nenhum dos canais de transmissão (${fallbackTargets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
     } catch {
       // Ignora erro

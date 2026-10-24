@@ -141,6 +141,14 @@
    - Quando sai gol em outro jogo do mesmo campeonato, um banner flutuante discreto e moderno surge no canto da tela por exatamente 5 segundos e desaparece automaticamente.
    - Não dispara alerta para gols da partida que o usuário já está assistindo na tela.
 
+4. **Vínculo Direto com Emissora Exata e Tabela De-Para (`broadcasterMapper.ts`)**:
+   - Cada jogo do dia possui metadados de transmissão exata: `broadcaster` (ex: `"ESPN 2"` ou `"Premiere 2"`), `broadcasters` e `hasExactBroadcast`.
+   - Uma tabela De-Para oficial (`BROADCASTER_MAPPING_TABLE`) associa cada emissora/streaming a seu `canonicalId`, aliases no IPTV e `excludeTokens` rigorosos (para evitar que Premiere 3 bata em Premiere 2, ou SBT News em SBT).
+   - **Comportamento do clique**:
+     - Se o confronto possuir 1 canal exato mapeado e presente na lista do usuário (ex: ESPN 2): **pula a tela intermediária e abre o player DIRETO no canal correto**.
+     - Se houver mais de uma opção oficial para a partida (ex: Disney+ e ESPN, ou Premiere e Globo): se o usuário tiver ambas na lista, abre um modal limpo oferecendo **exclusivamente as opções daquele jogo** (sem poluir com outros canais da liga). Se tiver apenas uma, abre direto.
+     - Fallback inteligente: se o canal exato não existir na lista ou for partida futura sem escala definida, exibe os canais relacionados disponíveis.
+
 ---
 
 ## 🔒 TABELA RÁPIDA DE DECISÃO (CHECKLIST PARA AGENTES E DEVS)

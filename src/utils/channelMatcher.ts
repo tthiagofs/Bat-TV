@@ -1,4 +1,6 @@
 import type { MediaItem } from '../types'
+export { findExactChannelForBroadcaster, BROADCASTER_MAPPING_TABLE, getCanonicalBroadcasterKey } from './broadcasterMapper'
+export type { BroadcasterMapping } from './broadcasterMapper'
 
 /** Dicionário de variações e sub-canais por emissora */
 const CHANNEL_ALIASES: Record<string, string[]> = {

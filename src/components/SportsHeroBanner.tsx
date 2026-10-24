@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { getItems } from '../services/catalog'
 
 import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
+import { findExactChannelForBroadcaster } from '../utils/broadcasterMapper'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
 import stadium1 from '../assets/stadiums/stadium1.jpg'
@@ -108,8 +109,6 @@ function SportsHeroBannerBase({ matches }: Props) {
     if (!service) return
     try {
       const liveList = await getItems(service, 'live', 'all')
-      const targets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
-      const matched = findAllMatchingLiveChannels(liveList, targets)
 
       // Filtra playlist apenas para esportes para não sobrecarregar o player na TV com 10.000 canais
       const sportsPlaylist = liveList.filter((ch: any) => {
@@ -128,25 +127,60 @@ function SportsHeroBannerBase({ matches }: Props) {
         leagueName: current.league,
       }
 
-      if (matched.length > 1 || (targets.length > 1 && matched.length >= 1)) {
+      // 1. Prioridade Máxima: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2)
+      const exactTargets = current.broadcasters && current.broadcasters.length > 0
+        ? current.broadcasters
+        : (current.broadcaster ? [current.broadcaster] : [])
+
+      if (exactTargets.length === 1) {
+        // Se houver 1 canal exato mapeado: pula a escolha e abre o player DIRETO no canal correto!
+        const exactChannel = findExactChannelForBroadcaster(liveList, exactTargets[0])
+        if (exactChannel) {
+          play(exactChannel, { playlist: effectivePlaylist, matchContext })
+          return
+        }
+      } else if (exactTargets.length > 1) {
+        // Se houver duas ou mais opções oficiais específicas (ex: ESPN e Disney+, ou Globo e Premiere):
+        const matched = findAllMatchingLiveChannels(liveList, exactTargets)
+        if (matched.length === 1) {
+          // Se o usuário só possui 1 dessas opções no IPTV, abre direto sem perguntar!
+          play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
+          return
+        }
+        if (matched.length > 1) {
+          // Se possui mais de uma, abre o modal limpo contendo APENAS as emissoras específicas desse jogo
+          setPickerData({
+            match: current,
+            options: matched,
+            liveList: effectivePlaylist,
+          })
+          return
+        }
+      }
+
+      // 2. Fallback Inteligente: Canais associados à partida/liga se o canal exato não foi achado
+      const fallbackTargets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
+      const fallbackMatched = findAllMatchingLiveChannels(liveList, fallbackTargets)
+
+      if (fallbackMatched.length === 1) {
+        play(fallbackMatched[0].channel, { playlist: effectivePlaylist, matchContext })
+        return
+      }
+
+      if (fallbackMatched.length > 1) {
         setPickerData({
           match: current,
-          options: matched,
+          options: fallbackMatched,
           liveList: effectivePlaylist,
         })
         return
       }
 
-      if (matched.length === 1) {
-        play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
-        return
-      }
-
-      const found = findBestLiveChannel(liveList, targets)
+      const found = findBestLiveChannel(liveList, fallbackTargets)
       if (found) {
         play(found, { playlist: effectivePlaylist, matchContext })
       } else {
-        alert(`Nenhum dos canais de transmissão (${targets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
+        alert(`Nenhum dos canais de transmissão (${fallbackTargets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
     } catch {
       // ignore
@@ -353,7 +387,7 @@ function SportsHeroBannerBase({ matches }: Props) {
                 className="flex items-center gap-2 px-5 sm:px-7 py-2.5 sm:py-3 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-black text-xs sm:text-sm shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer focus:outline-none focus:ring-4 focus:ring-rose-500 touch-manipulation"
               >
                 <Play size={16} className="fill-zinc-950" />
-                <span>{isLive ? 'Assistir Agora' : `Assistir na ${channel}`}</span>
+                <span>{isLive ? 'Assistir Agora' : `Assistir na ${current.broadcaster || channel}`}</span>
               </button>
 
               <button
