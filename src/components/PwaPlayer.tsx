@@ -176,9 +176,14 @@ export default function PwaPlayer({
   // Watchdog contra buffering infinito no PWA (destrava se ficar preso em 0:00)
   useEffect(() => {
     if (!buffering || error || isNative) return
+    const isOfflineLocal = activeUrl.startsWith('/offline-media/') || activeUrl.startsWith('blob:')
+    // Se for mídia baixada offline ou se o vídeo estiver buscando tempo (seek), o watchdog não deve intervir
+    if (isOfflineLocal) return
+    const v = videoRef.current
+    if (v && v.seeking) return
     const watchdogTimer = setTimeout(() => {
       const v = videoRef.current
-      if (!v) return
+      if (!v || v.seeking) return
       if (v.paused || v.currentTime === 0) {
         console.warn('PWA Watchdog disparado: destravando vídeo preso em buffer...')
         v.muted = true
@@ -194,7 +199,7 @@ export default function PwaPlayer({
       }
     }, 3500)
     return () => clearTimeout(watchdogTimer)
-  }, [buffering, error, isNative, retryKey])
+  }, [buffering, error, isNative, retryKey, activeUrl])
 
   // Watchdog ativo contra congelamento de imagem no mobile/web (live stream freeze recovery)
   useEffect(() => {
@@ -926,24 +931,89 @@ export default function PwaPlayer({
   ]
 
 
+  const pendingSeekRef = useRef<number | null>(null)
+  const isSeekingRef = useRef<boolean>(false)
+
+  // Ajusta o tempo do player de forma segura sem travar o WebKit/Safari nem estourar memória
+  const seekToTime = useCallback((targetTime: number) => {
+    const v = videoRef.current
+    if (!v) return
+
+    const dur = time.duration > 0 ? time.duration : Infinity
+    const safeTarget = Math.max(0, Math.min(dur, targetTime))
+    setTime((prev) => ({ ...prev, current: safeTarget }))
+
+    if (isNative) {
+      NativePlayer.seekTo({ position: safeTarget }).catch(() => {})
+      wake()
+      return
+    }
+
+    const isOfflineLocal = activeUrl.startsWith('/offline-media/') || activeUrl.startsWith('blob:')
+
+    // Para mídias locais baixadas: previne sobrecarga de decodificação no WebKit/Safari
+    if (isOfflineLocal) {
+      if (v.seeking || isSeekingRef.current) {
+        pendingSeekRef.current = safeTarget
+        return
+      }
+
+      isSeekingRef.current = true
+      setBuffering(true)
+
+      let seekTimeout: number | undefined = undefined
+
+      const onSeekEnd = () => {
+        window.clearTimeout(seekTimeout)
+        v.removeEventListener('seeked', onSeekEnd)
+        v.removeEventListener('error', onSeekEnd)
+        isSeekingRef.current = false
+        setBuffering(false)
+
+        if (pendingSeekRef.current !== null) {
+          const next = pendingSeekRef.current
+          pendingSeekRef.current = null
+          seekToTime(next)
+        }
+      }
+
+      v.addEventListener('seeked', onSeekEnd, { once: true })
+      v.addEventListener('error', onSeekEnd, { once: true })
+
+      seekTimeout = window.setTimeout(() => {
+        onSeekEnd()
+      }, 1500)
+
+      try {
+        if (typeof (v as any).fastSeek === 'function') {
+          ;(v as any).fastSeek(safeTarget)
+        } else {
+          v.currentTime = safeTarget
+        }
+      } catch {
+        v.currentTime = safeTarget
+      }
+      wake()
+      return
+    }
+
+    // Para vídeos normais de catálogo online: comportamento 100% original e inalterado
+    try {
+      v.currentTime = safeTarget
+    } catch (err) {
+      console.warn('Erro ao ajustar tempo no player online:', err)
+    }
+    wake()
+  }, [isNative, activeUrl, time.duration, wake])
+
   // Avança ou retrocede tempo relativo (ex: +10s ou -10s com setas do controle)
   const seekRelative = useCallback((delta: number) => {
     if (isLive) return
     const dur = time.duration > 0 ? time.duration : Infinity
     const cur = time.current
     const nextTime = Math.max(0, Math.min(dur, cur + delta))
-    if (isNative) {
-      NativePlayer.seekTo({ position: nextTime }).catch(() => {})
-      setTime((prev) => ({ ...prev, current: nextTime }))
-      wake()
-      return
-    }
-    const v = videoRef.current
-    if (!v) return
-    v.currentTime = nextTime
-    setTime((prev) => ({ ...prev, current: nextTime }))
-    wake()
-  }, [isLive, wake, isNative, time.duration, time.current])
+    seekToTime(nextTime)
+  }, [isLive, time.duration, time.current, seekToTime])
 
   // Clique no botão avança +30 segundos com segurança e fecha o botão flutuante
   const handleSkipIntro = useCallback(() => {
@@ -952,22 +1022,8 @@ export default function PwaPlayer({
     const dur = time.duration > 0 ? time.duration : Infinity
     const cur = time.current
     const nextTime = Math.max(0, Math.min(dur, cur + 30))
-    if (isNative) {
-      NativePlayer.seekTo({ position: nextTime }).catch(() => {})
-      setTime((prev) => ({ ...prev, current: nextTime }))
-      wake()
-      return
-    }
-    const v = videoRef.current
-    if (!v) return
-    try {
-      v.currentTime = nextTime
-      setTime((prev) => ({ ...prev, current: nextTime }))
-    } catch (err) {
-      console.warn('Erro ao pular abertura:', err)
-    }
-    wake()
-  }, [wake, isNative, time.duration, time.current])
+    seekToTime(nextTime)
+  }, [time.duration, time.current, seekToTime])
 
   useEffect(() => {
     wake()
@@ -1817,21 +1873,19 @@ export default function PwaPlayer({
                 const target = Number(e.target.value)
                 setDragProgressVal(null)
                 setIsDraggingProgress(false)
-                if (isNative) {
-                  NativePlayer.seekTo({ position: target }).catch(() => {})
-                  setTime((prev) => ({ ...prev, current: target }))
-                } else if (videoRef.current) {
-                  videoRef.current.currentTime = target
-                  setTime((prev) => ({ ...prev, current: target }))
-                }
+                seekToTime(target)
               }}
-              onPointerUp={() => {
+              onPointerUp={(e) => {
+                const target = dragProgressVal !== null ? dragProgressVal : Number((e.target as any).value)
                 setIsDraggingProgress(false)
                 setDragProgressVal(null)
+                if (isFinite(target)) seekToTime(target)
               }}
-              onTouchEnd={() => {
+              onTouchEnd={(e) => {
+                const target = dragProgressVal !== null ? dragProgressVal : Number((e.target as any).value)
                 setIsDraggingProgress(false)
                 setDragProgressVal(null)
+                if (isFinite(target)) seekToTime(target)
               }}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowLeft') {
