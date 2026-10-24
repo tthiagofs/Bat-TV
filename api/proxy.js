@@ -1,15 +1,15 @@
 import http from 'node:http'
 import https from 'node:https'
 
-const agentHttp = new http.Agent({ keepAlive: false })
-const agentHttps = new https.Agent({ keepAlive: false })
+const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
+const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
 
 export default function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
   res.setHeader('Access-Control-Allow-Headers', '*')
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges')
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, ETag, Last-Modified')
   res.setHeader('Accept-Ranges', 'bytes')
 
   if (req.method === 'OPTIONS') {
@@ -48,6 +48,9 @@ export default function handler(req, res) {
 
       if (req.headers.range) {
         headers['Range'] = req.headers.range
+      }
+      if (req.headers['if-range']) {
+        headers['If-Range'] = req.headers['if-range']
       }
 
       const clientMethod = req.method === 'HEAD' ? 'HEAD' : 'GET'
@@ -94,6 +97,16 @@ export default function handler(req, res) {
           }
           if (proxyRes.headers['content-length']) {
             res.setHeader('Content-Length', proxyRes.headers['content-length'])
+          }
+          if (proxyRes.headers['etag']) {
+            res.setHeader('ETag', proxyRes.headers['etag'])
+          }
+          if (proxyRes.headers['last-modified']) {
+            res.setHeader('Last-Modified', proxyRes.headers['last-modified'])
+          }
+
+          if (req.headers.range || targetUrl.includes('/movie/') || targetUrl.includes('/series/')) {
+            res.setHeader('Cache-Control', 'private, max-age=86400')
           }
 
           if (req.method === 'HEAD') {
@@ -172,7 +185,7 @@ export default function handler(req, res) {
         }
       })
 
-      proxyReq.setTimeout(25000, () => {
+      proxyReq.setTimeout(55000, () => {
         proxyReq.destroy()
         if (!res.headersSent) {
           res.statusCode = 504

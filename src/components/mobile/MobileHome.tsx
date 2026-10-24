@@ -110,7 +110,7 @@ export default function MobileHome({ onNavigate }: Props) {
     return () => {
       isCurrent = false
     }
-  }, [service, profile])
+  }, [service, profile?.preferredGenres, profile?.favorites])
 
   const handleOpenMedia = async (media: MediaItem) => {
     // Busca informações enriquecidas no TMDB para abrir o modal completo

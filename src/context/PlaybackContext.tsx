@@ -113,7 +113,8 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
       return
     }
     if (activeItem.type === 'movies') {
-      setCurrent({ item: activeItem, url: service.vodUrl(activeItem.id, activeItem.ext || 'mp4'), title: activeItem.name, isLive: false, startAt })
+      const preferredExt = Capacitor.isNativePlatform() ? (activeItem.ext || 'mp4') : 'mp4'
+      setCurrent({ item: activeItem, url: service.vodUrl(activeItem.id, preferredExt), title: activeItem.name, isLive: false, startAt })
       setOpeningMediaTitle(null)
       return
     }
@@ -216,12 +217,13 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
         saved.position / saved.duration > 0.02 && saved.position / saved.duration < 0.95
       const episodeStartAt = isResumable ? saved.position : 0
 
+      const preferredExt = Capacitor.isNativePlatform() ? (episode.ext || 'mp4') : 'mp4'
       setCurrent({
         item: activeItem,
-        episode: { id: episode.id, ext: episode.ext, title: episode.title },
+        episode: { id: episode.id, ext: preferredExt, title: episode.title },
         startAt: episodeStartAt,
         allEpisodes: allEpisodes.map((e) => ({ id: e.id, ext: e.ext, title: e.title })),
-        url: service.episodeUrl(episode.id, episode.ext),
+        url: service.episodeUrl(episode.id, preferredExt),
         title: `${activeItem.name} - ${episode.title}`,
         isLive: false,
       })
@@ -238,11 +240,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     const curIdx = current.allEpisodes.findIndex((e) => String(e.id) === String(current.episode?.id))
     if (curIdx >= 0 && curIdx < current.allEpisodes.length - 1) {
       const nextEp = current.allEpisodes[curIdx + 1]
+      const preferredExt = Capacitor.isNativePlatform() ? (nextEp.ext || 'mp4') : 'mp4'
       setCurrent({
         ...current,
         episode: nextEp,
         startAt: 0,
-        url: service.episodeUrl(nextEp.id, nextEp.ext),
+        url: service.episodeUrl(nextEp.id, preferredExt),
         title: `${current.item.name} - ${nextEp.title}`,
       })
     }

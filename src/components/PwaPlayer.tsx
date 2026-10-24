@@ -173,19 +173,21 @@ export default function PwaPlayer({
     setNeedsUnmute(true)
   }, [url])
 
-  // Watchdog contra buffering infinito no PWA (destrava se ficar preso em 0:00)
+  // Watchdog contra buffering infinito no PWA (destrava se ficar preso no início 0:00)
   useEffect(() => {
     if (!buffering || error || isNative) return
     const isOfflineLocal = activeUrl.startsWith('/offline-media/') || activeUrl.startsWith('blob:')
-    // Se for mídia baixada offline ou se o vídeo estiver buscando tempo (seek), o watchdog não deve intervir
     if (isOfflineLocal) return
     const v = videoRef.current
-    if (v && v.seeking) return
+    if (v && (v.seeking || isSeekingRef.current)) return
+    // Não interfere em seeks no meio do conteúdo (ex: pulou para o minuto 20)
+    if (v && v.currentTime > 0.5) return
+
     const watchdogTimer = setTimeout(() => {
       const v = videoRef.current
-      if (!v || v.seeking) return
-      if (v.paused || v.currentTime === 0) {
-        console.warn('PWA Watchdog disparado: destravando vídeo preso em buffer...')
+      if (!v || v.seeking || isSeekingRef.current) return
+      if (v.currentTime === 0 && (v.paused || buffering)) {
+        console.warn('PWA Watchdog disparado: destravando vídeo preso em buffer no início...')
         v.muted = true
         v.play()
           .then(() => {
@@ -714,7 +716,7 @@ export default function PwaPlayer({
           if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
             console.warn('Tentando fallback para player nativo da Apple...')
             video.src = streamUrl
-            video.preload = 'auto'
+            video.preload = 'metadata'
             video.load()
             tryStartPlayback(video)
             return
@@ -726,7 +728,7 @@ export default function PwaPlayer({
       // No iOS PWA, garante que o elemento comece mudo antes de setar o src e carregar
       video.muted = true
       video.src = streamUrl
-      video.preload = 'auto'
+      video.preload = 'metadata'
       video.load()
 
       const onCanPlay = () => {
@@ -740,11 +742,6 @@ export default function PwaPlayer({
       } else {
         video.addEventListener('loadedmetadata', onCanPlay, { once: true })
         video.addEventListener('canplay', onCanPlay, { once: true })
-        setTimeout(() => {
-          if (video && video.paused) {
-            tryStartPlayback(video)
-          }
-        }, 800)
       }
     }
     return () => {
@@ -933,78 +930,75 @@ export default function PwaPlayer({
 
   const pendingSeekRef = useRef<number | null>(null)
   const isSeekingRef = useRef<boolean>(false)
+  const lastSoughtTimeRef = useRef<number>(-1)
 
-  // Ajusta o tempo do player de forma segura sem travar o WebKit/Safari nem estourar memória
+  // Ajusta o tempo do player de forma segura no WebKit/Safari sem travar nem estourar memória
   const seekToTime = useCallback((targetTime: number) => {
     const v = videoRef.current
     if (!v) return
 
     const dur = time.duration > 0 ? time.duration : Infinity
     const safeTarget = Math.max(0, Math.min(dur, targetTime))
+
+    // Se o alvo for virtualmente idêntico ao último seek registrado (ex: disparos duplicados touchEnd + change), ignora
+    if (Math.abs(safeTarget - lastSoughtTimeRef.current) < 0.25) {
+      return
+    }
+
     setTime((prev) => ({ ...prev, current: safeTarget }))
 
     if (isNative) {
+      lastSoughtTimeRef.current = safeTarget
       NativePlayer.seekTo({ position: safeTarget }).catch(() => {})
       wake()
       return
     }
 
-    const isOfflineLocal = activeUrl.startsWith('/offline-media/') || activeUrl.startsWith('blob:')
-
-    // Para mídias locais baixadas: previne sobrecarga de decodificação no WebKit/Safari
-    if (isOfflineLocal) {
-      if (v.seeking || isSeekingRef.current) {
-        pendingSeekRef.current = safeTarget
-        return
-      }
-
-      isSeekingRef.current = true
-      setBuffering(true)
-
-      let seekTimeout: number | undefined = undefined
-
-      const onSeekEnd = () => {
-        window.clearTimeout(seekTimeout)
-        v.removeEventListener('seeked', onSeekEnd)
-        v.removeEventListener('error', onSeekEnd)
-        isSeekingRef.current = false
-        setBuffering(false)
-
-        if (pendingSeekRef.current !== null) {
-          const next = pendingSeekRef.current
-          pendingSeekRef.current = null
-          seekToTime(next)
-        }
-      }
-
-      v.addEventListener('seeked', onSeekEnd, { once: true })
-      v.addEventListener('error', onSeekEnd, { once: true })
-
-      seekTimeout = window.setTimeout(() => {
-        onSeekEnd()
-      }, 1500)
-
-      try {
-        if (typeof (v as any).fastSeek === 'function') {
-          ;(v as any).fastSeek(safeTarget)
-        } else {
-          v.currentTime = safeTarget
-        }
-      } catch {
-        v.currentTime = safeTarget
-      }
-      wake()
+    // Se já estiver buscando (seeking), enfileira a posição mais recente e descarta as intermediárias
+    if (v.seeking || isSeekingRef.current) {
+      pendingSeekRef.current = safeTarget
       return
     }
 
-    // Para vídeos normais de catálogo online: comportamento 100% original e inalterado
+    lastSoughtTimeRef.current = safeTarget
+    isSeekingRef.current = true
+    setBuffering(true)
+
+    let seekTimeout: number | undefined = undefined
+
+    const onSeekEnd = () => {
+      window.clearTimeout(seekTimeout)
+      v.removeEventListener('seeked', onSeekEnd)
+      v.removeEventListener('error', onSeekEnd)
+      isSeekingRef.current = false
+      setBuffering(false)
+
+      if (pendingSeekRef.current !== null) {
+        const next = pendingSeekRef.current
+        pendingSeekRef.current = null
+        seekToTime(next)
+      }
+    }
+
+    v.addEventListener('seeked', onSeekEnd, { once: true })
+    v.addEventListener('error', onSeekEnd, { once: true })
+
+    // Timeout de segurança caso o evento 'seeked' demore ou falhe na rede
+    seekTimeout = window.setTimeout(() => {
+      onSeekEnd()
+    }, 2000)
+
     try {
+      if (typeof (v as any).fastSeek === 'function') {
+        ;(v as any).fastSeek(safeTarget)
+      } else {
+        v.currentTime = safeTarget
+      }
+    } catch {
       v.currentTime = safeTarget
-    } catch (err) {
-      console.warn('Erro ao ajustar tempo no player online:', err)
     }
     wake()
-  }, [isNative, activeUrl, time.duration, wake])
+  }, [isNative, time.duration, wake])
 
   // Avança ou retrocede tempo relativo (ex: +10s ou -10s com setas do controle)
   const seekRelative = useCallback((delta: number) => {
@@ -1571,7 +1565,7 @@ export default function PwaPlayer({
           autoPlay
           playsInline
           muted={muted}
-          preload="auto"
+          preload="metadata"
           disableRemotePlayback
           {...{
             'webkit-playsinline': 'true',
