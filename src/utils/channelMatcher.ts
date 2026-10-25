@@ -1,4 +1,7 @@
 import type { MediaItem } from '../types'
+import type { Match } from '../services/sportsService'
+import { findChannelByMatchTeams } from './sportsPlaylist'
+import { findExactChannelForBroadcaster } from './broadcasterMapper'
 export { findExactChannelForBroadcaster, BROADCASTER_MAPPING_TABLE, getCanonicalBroadcasterKey } from './broadcasterMapper'
 export type { BroadcasterMapping } from './broadcasterMapper'
 
@@ -169,6 +172,9 @@ export interface MatchedChannelOption {
   targetName: string
   channel: MediaItem
   quality: string
+  isVirtual?: boolean
+  recommended?: boolean
+  badge?: string
 }
 
 /**
@@ -253,6 +259,221 @@ export function findAllMatchingLiveChannels(
         channel: best,
         quality,
       })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Constrói de forma abrangente todas as opções de transmissão ao vivo disponíveis para um confronto,
+ * agrupando todas as emissoras da família (ex: se o jogo passa na ESPN, lista todas as opções ESPN 1 a 6 + Disney+;
+ * se passa na CazéTV, garante a opção do YouTube Live da CazéTV; se passa no Premiere, lista os Premiere 2 a 8).
+ */
+export function buildMatchChannelOptions(
+  match: Match,
+  liveList: MediaItem[]
+): MatchedChannelOption[] {
+  if (!liveList || liveList.length === 0 || !match) return []
+
+  const results: MatchedChannelOption[] = []
+  const seenIds = new Set<number>()
+
+  const addOption = (
+    channel: MediaItem,
+    targetName: string,
+    opts?: { recommended?: boolean; badge?: string; isVirtual?: boolean; quality?: string }
+  ) => {
+    if (!channel || seenIds.has(channel.id)) return
+    seenIds.add(channel.id)
+
+    let quality = opts?.quality
+    if (!quality) {
+      const lower = channel.name.toLowerCase()
+      if (lower.includes('4k') || lower.includes('uhd')) quality = '4K'
+      else if (lower.includes('fhd') || lower.includes('1080')) quality = 'FHD'
+      else if (lower.includes('sd') || lower.includes('480')) quality = 'SD'
+      else quality = 'HD'
+    }
+
+    results.push({
+      targetName,
+      channel,
+      quality,
+      recommended: opts?.recommended,
+      badge: opts?.badge,
+      isVirtual: opts?.isVirtual,
+    })
+  }
+
+  // 1. Canal dedicado para o jogo (ex: "PREMIERE 2 - CRUZEIRO X REMO")
+  const eventChannel = findChannelByMatchTeams(liveList, match.home, match.away)
+  if (eventChannel) {
+    addOption(eventChannel, 'Canal Dedicado', {
+      recommended: true,
+      badge: 'Transmissão do Jogo',
+    })
+  }
+
+  // 2. Coleta de sinais e emissoras
+  const rawBroadcasters = [
+    ...(match.broadcasters || []),
+    match.broadcaster,
+    ...(match.channels || []),
+  ].filter(Boolean) as string[]
+
+  const allHintsText = [
+    ...rawBroadcasters,
+    match.league,
+    match.leagueId,
+  ].join(' ').toLowerCase()
+
+  const isCazeMatch =
+    allHintsText.includes('caze') ||
+    allHintsText.includes('cazé') ||
+    match.leagueId === 'fra.1' ||
+    match.leagueId === 'ger.1' ||
+    allHintsText.includes('ligue 1') ||
+    allHintsText.includes('bundesliga')
+
+  const isEspnMatch =
+    allHintsText.includes('espn') ||
+    allHintsText.includes('disney') ||
+    allHintsText.includes('star') ||
+    ['eng.1', 'esp.1', 'ita.1', 'fra.1', 'uefa.europa', 'conmebol.libertadores', 'conmebol.sudamericana'].includes(match.leagueId)
+
+  const isPremiereMatch =
+    allHintsText.includes('premiere') ||
+    allHintsText.includes('pfc') ||
+    ['bra.1', 'bra.2', 'bra.copa_do_brazil'].includes(match.leagueId)
+
+  const isSportvMatch =
+    allHintsText.includes('sportv') ||
+    allHintsText.includes('spor tv') ||
+    ['bra.1', 'bra.2', 'bra.copa_do_brazil', 'ger.1'].includes(match.leagueId)
+
+  // 3. Se a CazéTV for relevante para este confronto:
+  if (isCazeMatch) {
+    // Procura se o usuário possui canal IPTV da CazéTV (com validação estrita anti-Campos dos Goytacazes)
+    const iptvCaze = findExactChannelForBroadcaster(liveList, 'CazéTV')
+    if (iptvCaze) {
+      addOption(iptvCaze, 'CazéTV', {
+        recommended: true,
+        badge: 'Canal IPTV',
+      })
+    }
+
+    // SEMPRE inclui a opção de transmissão oficial da CazéTV via YouTube
+    const virtualCaze: MediaItem = {
+      key: 'youtube:cazetv',
+      id: 999901,
+      name: 'CazéTV (Ao Vivo no YouTube)',
+      type: 'live',
+      image: 'https://yt3.googleusercontent.com/ytc/AIdro_k9_f96l5n-qGk1Fv2rV-w8eG4gQh9C8m4z7d9A=s900-c-k-c0x00ffffff-no-rj',
+    }
+    addOption(virtualCaze, 'CazéTV Oficial', {
+      recommended: true,
+      badge: 'Oficial YouTube',
+      isVirtual: true,
+      quality: 'YouTube HD',
+    })
+  }
+
+  // 4. Se houver emissora específica indicada pelo sistema (ex: "ESPN 4" ou "Premiere 2"):
+  const primaryBroadcaster = match.broadcaster || (match.broadcasters && match.broadcasters[0])
+  if (primaryBroadcaster && !primaryBroadcaster.toLowerCase().includes('caze')) {
+    const primaryCh = findExactChannelForBroadcaster(liveList, primaryBroadcaster)
+    if (primaryCh) {
+      addOption(primaryCh, primaryBroadcaster, {
+        recommended: true,
+        badge: 'Transmissão Indicada',
+      })
+    }
+  }
+
+  // 5. Família ESPN & Disney+ (todas as opções para o usuário escolher com facilidade)
+  if (isEspnMatch) {
+    const espnNames = ['ESPN', 'ESPN 2', 'ESPN 3', 'ESPN 4', 'ESPN 5', 'ESPN 6', 'ESPN Extra']
+    for (const name of espnNames) {
+      const ch = findExactChannelForBroadcaster(liveList, name)
+      if (ch) {
+        addOption(ch, name)
+      }
+    }
+
+    // Procura todos os canais Disney+ / Star+ disponíveis na lista
+    const disneyChannels = liveList.filter((item) => {
+      const n = item.name.toLowerCase()
+      if (n.includes('junior') || n.includes('kids') || n.includes('infantil') || n.includes('desenho')) return false
+      return /\b(disney\+|disney\s*\+|disney\s*plus|star\+|star\s*\+|star\s*plus)\b/i.test(n)
+    })
+    for (const dCh of disneyChannels.slice(0, 4)) {
+      addOption(dCh, 'Disney+')
+    }
+  }
+
+  // 6. Família Premiere (Premiere Clubes, Premiere 2 a 9)
+  if (isPremiereMatch) {
+    const premiereNames = [
+      'Premiere',
+      'Premiere 2',
+      'Premiere 3',
+      'Premiere 4',
+      'Premiere 5',
+      'Premiere 6',
+      'Premiere 7',
+      'Premiere 8',
+      'Premiere 9',
+    ]
+    for (const name of premiereNames) {
+      const ch = findExactChannelForBroadcaster(liveList, name)
+      if (ch) {
+        addOption(ch, name)
+      }
+    }
+  }
+
+  // 7. Família SporTV (SporTV, SporTV 2, SporTV 3)
+  if (isSportvMatch) {
+    const sportvNames = ['SporTV', 'SporTV 2', 'SporTV 3']
+    for (const name of sportvNames) {
+      const ch = findExactChannelForBroadcaster(liveList, name)
+      if (ch) {
+        addOption(ch, name)
+      }
+    }
+  }
+
+  // 8. Demais emissoras oficiais mapeadas
+  const otherBroadcasters = [
+    'Globo',
+    'Record TV',
+    'SBT',
+    'Band',
+    'BandSports',
+    'TNT',
+    'Space',
+    'Max',
+    'Prime Video',
+    'Paramount+',
+    'Canal GOAT',
+  ]
+  for (const b of otherBroadcasters) {
+    const low = b.toLowerCase()
+    if (allHintsText.includes(low)) {
+      const ch = findExactChannelForBroadcaster(liveList, b)
+      if (ch) {
+        addOption(ch, b)
+      }
+    }
+  }
+
+  // 9. Se nenhum canal da família foi localizado até agora, usa fallback inteligente
+  if (results.length === 0) {
+    const fallbackTargets = match.channels && match.channels.length > 0 ? match.channels : ['SporTV', 'ESPN', 'Premiere']
+    const matched = findAllMatchingLiveChannels(liveList, fallbackTargets)
+    for (const m of matched) {
+      addOption(m.channel, m.targetName, { quality: m.quality })
     }
   }
 

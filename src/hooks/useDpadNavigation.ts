@@ -64,6 +64,11 @@ export function useDpadNavigation({
         return
       }
 
+      // Se o modal seletor de canais de esportes estiver aberto, ele possui seu próprio navegador 1D exclusivo
+      if (document.querySelector('[data-channel-picker-active="true"]')) {
+        return
+      }
+
       // Teclas de Voltar / Back do Android TV, Fire TV, Tizen e Web
       const isBackKey =
         e.key === 'Escape' ||

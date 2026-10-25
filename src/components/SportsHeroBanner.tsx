@@ -5,10 +5,8 @@ import { usePlayback } from '../context/PlaybackContext'
 import { useAuth } from '../context/AuthContext'
 import { getItems } from '../services/catalog'
 
-import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
-import { findExactChannelForBroadcaster } from '../utils/broadcasterMapper'
-import { buildSportsPlaylist, findChannelByMatchTeams } from '../utils/sportsPlaylist'
-import { findChannelByEpg } from '../utils/epgMatcher'
+import { buildMatchChannelOptions, type MatchedChannelOption } from '../utils/channelMatcher'
+import { buildSportsPlaylist } from '../utils/sportsPlaylist'
 import { getCazeTvLiveEmbedUrl, createCazeTvVirtualChannel } from '../services/cazeTvService'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
@@ -112,108 +110,18 @@ function SportsHeroBannerBase({ matches }: Props) {
     if (!service) return
     try {
       const liveList = await getItems(service, 'live', 'all')
+      const options = buildMatchChannelOptions(current, liveList)
 
-      const matchContext = {
-        leagueId: current.leagueId,
-        matchId: current.id,
-        leagueName: current.league,
-      }
-
-      // 0. Procura se existe algum canal de evento ao vivo dedicado a esse jogo (ex: "PREMIERE 2 - CRUZEIRO X REMO")
-      const eventChannel = findChannelByMatchTeams(liveList, current.home, current.away)
-      if (eventChannel) {
-        const playlist = buildSportsPlaylist(liveList, eventChannel)
-        play(eventChannel, { playlist, matchContext })
+      if (options.length === 0) {
+        alert(`Nenhum canal de transmissão foi encontrado na sua lista IPTV ativa para ${current.home} x ${current.away}.`)
         return
       }
 
-      // 1. Escaneamento do Guia Eletrônico de Programação (EPG) dos canais da lista IPTV
-      // Identifica com precisão se algum canal tem o jogo na grade atual (ex: ESPN 4 passando Hull City x Brentford)
-      const epgMatchedChannel = await findChannelByEpg(service, liveList, current.home, current.away, {
-        leagueSlug: current.leagueId,
-        broadcasters: current.broadcasters || (current.broadcaster ? [current.broadcaster] : []),
-        matchTimestamp: current.time,
+      setPickerData({
+        match: current,
+        options,
+        liveList,
       })
-      if (epgMatchedChannel) {
-        const playlist = buildSportsPlaylist(liveList, epgMatchedChannel)
-        play(epgMatchedChannel, { playlist, matchContext })
-        return
-      }
-
-      // 2. Transmissão da CazéTV via YouTube caso não exista canal da CazéTV no IPTV
-      const isCazeMatch =
-        (current.broadcasters && current.broadcasters.some((b) => b.toLowerCase().includes('caze'))) ||
-        (current.broadcaster && current.broadcaster.toLowerCase().includes('caze')) ||
-        (current.channels && current.channels.some((c) => c.toLowerCase().includes('caze')))
-
-      const iptvCazeChannel = findExactChannelForBroadcaster(liveList, 'CazéTV')
-
-      if (isCazeMatch && !iptvCazeChannel) {
-        const youtubeEmbedUrl = await getCazeTvLiveEmbedUrl()
-        const cazeVirtual = createCazeTvVirtualChannel(youtubeEmbedUrl)
-        play(cazeVirtual, { playlist: [cazeVirtual, ...buildSportsPlaylist(liveList)], matchContext })
-        return
-      }
-
-      // 3. Prioridade: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2)
-      const exactTargets = current.broadcasters && current.broadcasters.length > 0
-        ? current.broadcasters
-        : (current.broadcaster ? [current.broadcaster] : [])
-
-      if (exactTargets.length === 1) {
-        // Se houver 1 canal exato mapeado: pula a escolha e abre o player DIRETO no canal correto!
-        const exactChannel = findExactChannelForBroadcaster(liveList, exactTargets[0])
-        if (exactChannel) {
-          const playlist = buildSportsPlaylist(liveList, exactChannel)
-          play(exactChannel, { playlist, matchContext })
-          return
-        }
-      } else if (exactTargets.length > 1) {
-        // Se houver duas ou mais opções oficiais específicas (ex: ESPN 4 e Disney+, ou Globo e Premiere):
-        const matched = findAllMatchingLiveChannels(liveList, exactTargets)
-        if (matched.length === 1) {
-          // Se o usuário só possui 1 dessas opções no IPTV, abre direto sem perguntar!
-          const playlist = buildSportsPlaylist(liveList, matched[0].channel)
-          play(matched[0].channel, { playlist, matchContext })
-          return
-        }
-        if (matched.length > 1) {
-          // Se possui mais de uma, abre o modal limpo contendo APENAS as emissoras específicas desse jogo
-          setPickerData({
-            match: current,
-            options: matched,
-            liveList,
-          })
-          return
-        }
-      }
-
-      // 2. Fallback Inteligente: Canais associados à partida/liga se o canal exato não foi achado
-      const fallbackTargets = current.channels && current.channels.length > 0 ? current.channels : [channel, 'SporTV']
-      const fallbackMatched = findAllMatchingLiveChannels(liveList, fallbackTargets)
-
-      if (fallbackMatched.length === 1) {
-        const playlist = buildSportsPlaylist(liveList, fallbackMatched[0].channel)
-        play(fallbackMatched[0].channel, { playlist, matchContext })
-        return
-      }
-
-      if (fallbackMatched.length > 1) {
-        setPickerData({
-          match: current,
-          options: fallbackMatched,
-          liveList,
-        })
-        return
-      }
-
-      const found = findBestLiveChannel(liveList, fallbackTargets)
-      if (found) {
-        const playlist = buildSportsPlaylist(liveList, found)
-        play(found, { playlist, matchContext })
-      } else {
-        alert(`Nenhum dos canais de transmissão (${fallbackTargets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
-      }
     } catch {
       // ignore
     }
@@ -667,19 +575,29 @@ function SportsHeroBannerBase({ matches }: Props) {
         <SportsChannelPickerModal
           match={pickerData.match}
           options={pickerData.options}
-          onSelectChannel={(ch) => {
+          onSelectChannel={async (ch, isVirtual) => {
             const list = pickerData.liveList
-            const match = pickerData.match
+            const matchSelected = pickerData.match
             setPickerData(null)
+
+            const matchContext = {
+              leagueId: matchSelected.leagueId,
+              matchId: matchSelected.id,
+              leagueName: matchSelected.league,
+            }
+
+            if (isVirtual || ch.id === 999901 || ch.key === 'youtube:cazetv') {
+              const youtubeEmbedUrl = await getCazeTvLiveEmbedUrl()
+              const cazeVirtual = createCazeTvVirtualChannel(youtubeEmbedUrl)
+              play(cazeVirtual, {
+                playlist: [cazeVirtual, ...buildSportsPlaylist(list)],
+                matchContext,
+              })
+              return
+            }
+
             const playlist = buildSportsPlaylist(list, ch)
-            play(ch, {
-              playlist,
-              matchContext: {
-                leagueId: match.leagueId,
-                matchId: match.id,
-                leagueName: match.league,
-              },
-            })
+            play(ch, { playlist, matchContext })
           }}
           onClose={() => setPickerData(null)}
         />

@@ -59,6 +59,16 @@ export const BROADCASTER_MAPPING_TABLE: Record<string, BroadcasterMapping> = {
     displayName: 'Premiere 7',
     aliases: ['premiere 7', 'premiere7', 'pfc 7'],
   },
+  'Premiere 8': {
+    canonicalId: 'iptv_premiere_8',
+    displayName: 'Premiere 8',
+    aliases: ['premiere 8', 'premiere8', 'pfc 8'],
+  },
+  'Premiere 9': {
+    canonicalId: 'iptv_premiere_9',
+    displayName: 'Premiere 9',
+    aliases: ['premiere 9', 'premiere9', 'pfc 9'],
+  },
 
   // ESPN
   'ESPN': {
