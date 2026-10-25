@@ -149,6 +149,12 @@
 4. **Vínculo Direto com Emissora Exata e Tabela De-Para (`broadcasterMapper.ts` e `channelMatcher.ts`)**:
    - Cada jogo do dia possui metadados de transmissão: `broadcaster` (ex: `"ESPN 2"` ou `"Premiere 2"`), `broadcasters` e `hasExactBroadcast`.
    - **Busca Inteligente por Evento (`findChannelByMatchTeams`)**: Utiliza `getTeamSearchKeywords` para analisar palavras-chave e apelidos dos dois clubes (ex: `athletic`, `bilbao`, `getafe`, `cruzeiro`, `galo`). Se o IPTV tiver um canal de evento dedicado (ex: `DISNEY+ 03: ATHLETIC X GETAFE` ou `PREMIERE 2 - CRUZEIRO X REMO`), abre direto sem perguntas.
+   - **Escaneamento do EPG em Tempo Real (`findChannelByEpg`)**:
+     - Antes de recorrer a chutes ou padrões, o app consulta o Guia Eletrônico de Programação (EPG) dos canais esportivos candidatos no IPTV do usuário.
+     - Se o EPG de um canal (ex: `ESPN 4`) tiver no título ou descrição o confronto (ex: `Hull City x Brentford`), o player abre diretamente o canal exato.
+   - **CazéTV: Bloqueio do falso positivo Goytacazes e Fallback Oficial YouTube**:
+     - O canal CazéTV possui exclusão obrigatória para `goytacazes`, `campos` e emissoras abertas para nunca abrir `RecordTv campos dos goytacazes`.
+     - Caso o usuário não possua CazéTV na sua grade IPTV (servidores piratas costumam não ter), o app abre automaticamente a transmissão oficial gratuita e ao vivo da CazéTV no YouTube via player embutido (`cazeTvService.ts`), sem travar e sem erros.
    - **Mapeamento de ESPN+ para Disney+**: No Brasil, transmissões rotuladas pela API como `ESPN+` (streaming dos EUA) são transmitidas pelo `Disney+`. Elas nunca devem ser direcionadas erroneamente para o canal linear `ESPN 1`.
    - **Sem Expansão Artificial de Subcanais**: O app NUNCA expande `"Premiere"` em `"Premiere 1, 2, 3, 4, 5"` para forçar o usuário a adivinhar. Se o canal for Premiere, vai direto ao canal Premiere principal sem modal.
    - **Modal apenas para plataformas diferentes**: Se um jogo passar simultaneamente em duas plataformas oficiais distintas (ex: `"Disney+"` e `"ESPN 4"`, ou `"Globo"` e `"Premiere"`), o modal exibirá exclusivamente essas 2 opções. Se o usuário tiver apenas uma, vai direto sem modal.

@@ -122,15 +122,24 @@ export default function Player({
 }: Props) {
   const isNative = useMemo(() => Capacitor.isNativePlatform(), [])
 
+  const [activeUrl, setActiveUrl] = useState(url)
+  const isYouTube = useMemo(() => {
+    return (
+      activeUrl.includes('youtube.com') ||
+      activeUrl.includes('youtube-nocookie.com') ||
+      activeUrl.startsWith('youtube:')
+    )
+  }, [activeUrl])
+
   useEffect(() => {
-    if (!isNative) return
+    if (!isNative || isYouTube) return
     document.documentElement.classList.add('native-player-active')
     document.body.classList.add('native-player-active')
     return () => {
       document.documentElement.classList.remove('native-player-active')
       document.body.classList.remove('native-player-active')
     }
-  }, [isNative])
+  }, [isNative, isYouTube])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -167,7 +176,7 @@ export default function Player({
   const [buffering, setBuffering] = useState(true)
   const [error, setError] = useState('')
   const [retryKey, setRetryKey] = useState(0)
-  const [activeUrl, setActiveUrl] = useState(url)
+
   const [streamAttempt, setStreamAttempt] = useState<'m3u8' | 'ts'>('m3u8')
   const [hasAutoTriedExt, setHasAutoTriedExt] = useState(false)
   const [needsUserGesture, setNeedsUserGesture] = useState(false)
@@ -530,6 +539,12 @@ export default function Player({
 
   // Carrega o stream com ExoPlayer nativo na TV ou Hls.js no navegador
   useEffect(() => {
+    if (isYouTube) {
+      setBuffering(false)
+      setPlaying(true)
+      return
+    }
+
     if (isNative) {
       setError('')
       setBuffering(true)
@@ -1517,10 +1532,19 @@ export default function Player({
             }
           : undefined
       }
-      className={`fixed inset-0 z-50 ${isNative ? 'bg-transparent' : 'bg-black'} select-none ${showControls ? '' : 'cursor-none'} touch-manipulation`}
+      className={`fixed inset-0 z-50 ${isNative && !isYouTube ? 'bg-transparent' : 'bg-black'} select-none ${showControls ? '' : 'cursor-none'} touch-manipulation`}
     >
 
-      {!isNative && (
+      {isYouTube ? (
+        <iframe
+          key={activeUrl}
+          src={activeUrl}
+          title={title}
+          className="w-full h-full border-0 absolute inset-0 z-10"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      ) : !isNative ? (
         <video
           ref={videoRef}
           autoPlay
@@ -1601,7 +1625,7 @@ export default function Player({
           onLoadedMetadata={(e) => { if (startAt > 0 && !isLive) e.currentTarget.currentTime = startAt }}
           className={`w-full h-full relative z-0 ${aspect === 'cover' ? 'object-cover' : 'object-contain'}`}
         />
-      )}
+      ) : null}
 
       {/* Camada de Toque Transparente para Exibir/Ocultar Controles com Duração Garantida de 4.5s */}
       <div

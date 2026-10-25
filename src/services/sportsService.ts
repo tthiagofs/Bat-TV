@@ -554,14 +554,11 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
 
   // 4. Regras específicas com emissoras exatas por liga e clube
   if (leagueSlug === 'eng.1') {
-    // Premier League: No Brasil, a Disney possui todos os direitos. Sempre no Disney+ e jogos de TV na ESPN / ESPN 4
+    // Premier League: No Brasil, a Disney possui todos os direitos. Todos os jogos estão no Disney+ e na grade ESPN.
     if (!exactBroadcasters.includes('Disney+')) {
       exactBroadcasters.push('Disney+')
     }
-    if (!exactBroadcasters.some((b) => b.startsWith('ESPN'))) {
-      exactBroadcasters.unshift('ESPN 4')
-    }
-    hasExactBroadcast = true
+    hasExactBroadcast = exactBroadcasters.length > 0
   } else if (leagueSlug === 'esp.1') {
     if (exactBroadcasters.length === 0) {
       exactBroadcasters = ['Disney+', 'ESPN']

@@ -151,7 +151,8 @@ export const BROADCASTER_MAPPING_TABLE: Record<string, BroadcasterMapping> = {
   'CazéTV': {
     canonicalId: 'iptv_cazetv',
     displayName: 'CazéTV',
-    aliases: ['cazetv', 'caze tv', 'cazé tv', 'caze tv hd', 'cazetv hd', 'caze tv fhd', 'canal caze', 'caze', 'cazé'],
+    aliases: ['cazetv', 'caze tv', 'cazé tv', 'caze tv hd', 'cazetv hd', 'caze tv fhd', 'canal caze', 'canal cazé'],
+    excludeTokens: ['goytacaz', 'goytacazes', 'campos', 'record', 'globo', 'sbt', 'band'],
   },
   'Canal GOAT': {
     canonicalId: 'iptv_goat',

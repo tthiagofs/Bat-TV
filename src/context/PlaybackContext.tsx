@@ -118,11 +118,15 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
     }
 
     if (activeItem.type === 'live') {
+      const isYoutube = activeItem.key?.startsWith('youtube:') || (activeItem as any).url?.includes('youtube')
+      const targetUrl = isYoutube
+        ? ((activeItem as any).url || 'https://www.youtube-nocookie.com/embed/live_stream?channel=UCZiYbVptd3PVPf4f6eR6UaQ&autoplay=1')
+        : service.liveUrl(activeItem.id, 'm3u8')
       setPlaylist(opts.playlist ?? [])
       upsertHistory({ ...activeItem, position: 0, duration: 0, updatedAt: Date.now() })
       setCurrent({
         item: activeItem,
-        url: service.liveUrl(activeItem.id, 'm3u8'),
+        url: targetUrl,
         title: activeItem.name,
         isLive: true,
         startAt: 0,

@@ -20,7 +20,7 @@ const CHANNEL_ALIASES: Record<string, string[]> = {
   'premiere 4': ['premiere 4', 'premiere4'],
   'premiere 5': ['premiere 5', 'premiere5'],
   'premiere 6': ['premiere 6', 'premiere6'],
-  cazetv: ['cazetv', 'caze tv', 'cazé tv', 'caze tv hd', 'cazetv hd', 'caze tv fhd', 'canal caze', 'caze', 'cazé'],
+  cazetv: ['cazetv', 'caze tv', 'cazé tv', 'caze tv hd', 'cazetv hd', 'caze tv fhd', 'canal caze', 'canal cazé'],
   record: ['record tv', 'rede record', 'tv record', 'record sp', 'record rj', 'record paulista', 'record'],
   globo: ['tv globo', 'globo sp', 'globo rj', 'rede globo', 'globo minas', 'globo'],
   sbt: ['tv sbt', 'sbt sp', 'sbt rj', 'rede sbt', 'sbt'],
@@ -83,8 +83,21 @@ export function findBestLiveChannel(
       }
 
       if (rawTarget === 'cazetv') {
-        if (!name.includes('caze') && !name.includes('cazé')) {
-          score -= 500
+        if (
+          name.includes('goytacaz') ||
+          name.includes('campos') ||
+          name.includes('record') ||
+          name.includes('globo') ||
+          name.includes('sbt') ||
+          name.includes('band')
+        ) {
+          score -= 10000
+        }
+        const isRealCaze =
+          /\b(cazetv|caze\s*tv|cazé\s*tv|canal\s*caze|canal\s*cazé)\b/i.test(name) ||
+          (/(^|\W)(caze|cazé)(\W|$)/i.test(name) && !name.includes('goytacaz'))
+        if (!isRealCaze) {
+          score -= 10000
         }
       }
 

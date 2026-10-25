@@ -9,6 +9,7 @@ export interface MediaItem {
   image: string
   ext?: string
   rating?: string
+  url?: string
 }
 
 export const makeKey = (type: MediaType, id: number) => `${type}:${id}`

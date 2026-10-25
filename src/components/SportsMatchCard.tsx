@@ -7,6 +7,8 @@ import { getItems } from '../services/catalog'
 import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
 import { findExactChannelForBroadcaster } from '../utils/broadcasterMapper'
 import { buildSportsPlaylist, findChannelByMatchTeams } from '../utils/sportsPlaylist'
+import { findChannelByEpg } from '../utils/epgMatcher'
+import { getCazeTvLiveEmbedUrl, createCazeTvVirtualChannel } from '../services/cazeTvService'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
 
@@ -146,7 +148,35 @@ function SportsMatchCardBase({ match, onSelect }: Props) {
         return
       }
 
-      // 1. Prioridade Máxima: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2, CazéTV)
+      // 1. Escaneamento do Guia Eletrônico de Programação (EPG) dos canais da lista IPTV
+      // Identifica com precisão se algum canal tem o jogo na grade atual (ex: ESPN 4 passando Hull City x Brentford)
+      const epgMatchedChannel = await findChannelByEpg(service, liveList, match.home, match.away, {
+        leagueSlug: match.leagueId,
+        broadcasters: match.broadcasters || (match.broadcaster ? [match.broadcaster] : []),
+        matchTimestamp: match.time,
+      })
+      if (epgMatchedChannel) {
+        const playlist = buildSportsPlaylist(liveList, epgMatchedChannel)
+        play(epgMatchedChannel, { playlist, matchContext })
+        return
+      }
+
+      // 2. Transmissão da CazéTV via YouTube caso não exista canal da CazéTV no IPTV
+      const isCazeMatch =
+        (match.broadcasters && match.broadcasters.some((b) => b.toLowerCase().includes('caze'))) ||
+        (match.broadcaster && match.broadcaster.toLowerCase().includes('caze')) ||
+        (match.channels && match.channels.some((c) => c.toLowerCase().includes('caze')))
+
+      const iptvCazeChannel = findExactChannelForBroadcaster(liveList, 'CazéTV')
+
+      if (isCazeMatch && !iptvCazeChannel) {
+        const youtubeEmbedUrl = await getCazeTvLiveEmbedUrl()
+        const cazeVirtual = createCazeTvVirtualChannel(youtubeEmbedUrl)
+        play(cazeVirtual, { playlist: [cazeVirtual, ...buildSportsPlaylist(liveList)], matchContext })
+        return
+      }
+
+      // 3. Prioridade: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2)
       const exactTargets = match.broadcasters && match.broadcasters.length > 0
         ? match.broadcasters
         : (match.broadcaster ? [match.broadcaster] : [])
