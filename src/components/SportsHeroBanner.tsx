@@ -7,6 +7,7 @@ import { getItems } from '../services/catalog'
 
 import { findBestLiveChannel, findAllMatchingLiveChannels, type MatchedChannelOption } from '../utils/channelMatcher'
 import { findExactChannelForBroadcaster } from '../utils/broadcasterMapper'
+import { buildSportsPlaylist, findChannelByMatchTeams } from '../utils/sportsPlaylist'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
 import stadium1 from '../assets/stadiums/stadium1.jpg'
@@ -110,24 +111,21 @@ function SportsHeroBannerBase({ matches }: Props) {
     try {
       const liveList = await getItems(service, 'live', 'all')
 
-      // Filtra playlist apenas para esportes para não sobrecarregar o player na TV com 10.000 canais
-      const sportsPlaylist = liveList.filter((ch: any) => {
-        const n = (ch.name || '').toLowerCase()
-        const g = (ch.group || ch.category_id || '').toLowerCase()
-        return (
-          g.includes('sport') || g.includes('esport') || g.includes('futebol') || g.includes('premiere') || g.includes('espn') || g.includes('combate') ||
-          n.includes('sport') || n.includes('esport') || n.includes('espn') || n.includes('premiere') || n.includes('disney') || n.includes('dazn') || n.includes('caze') || n.includes('band') || n.includes('globo') || n.includes('sbt') || n.includes('tnt') || n.includes('space')
-        )
-      })
-      const effectivePlaylist = sportsPlaylist.length > 0 ? sportsPlaylist : liveList.slice(0, 150)
-
       const matchContext = {
         leagueId: current.leagueId,
         matchId: current.id,
         leagueName: current.league,
       }
 
-      // 1. Prioridade Máxima: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2)
+      // 0. Procura se existe algum canal de evento ao vivo dedicado a esse jogo (ex: "PREMIERE 2 - CRUZEIRO X REMO")
+      const eventChannel = findChannelByMatchTeams(liveList, current.home, current.away)
+      if (eventChannel) {
+        const playlist = buildSportsPlaylist(liveList, eventChannel)
+        play(eventChannel, { playlist, matchContext })
+        return
+      }
+
+      // 1. Prioridade Máxima: Emissoras exatas confirmadas do confronto (ex: ESPN 2, Premiere 2, CazéTV)
       const exactTargets = current.broadcasters && current.broadcasters.length > 0
         ? current.broadcasters
         : (current.broadcaster ? [current.broadcaster] : [])
@@ -136,15 +134,17 @@ function SportsHeroBannerBase({ matches }: Props) {
         // Se houver 1 canal exato mapeado: pula a escolha e abre o player DIRETO no canal correto!
         const exactChannel = findExactChannelForBroadcaster(liveList, exactTargets[0])
         if (exactChannel) {
-          play(exactChannel, { playlist: effectivePlaylist, matchContext })
+          const playlist = buildSportsPlaylist(liveList, exactChannel)
+          play(exactChannel, { playlist, matchContext })
           return
         }
       } else if (exactTargets.length > 1) {
-        // Se houver duas ou mais opções oficiais específicas (ex: ESPN e Disney+, ou Globo e Premiere):
+        // Se houver duas ou mais opções oficiais específicas (ex: ESPN 4 e Disney+, ou Globo e Premiere):
         const matched = findAllMatchingLiveChannels(liveList, exactTargets)
         if (matched.length === 1) {
           // Se o usuário só possui 1 dessas opções no IPTV, abre direto sem perguntar!
-          play(matched[0].channel, { playlist: effectivePlaylist, matchContext })
+          const playlist = buildSportsPlaylist(liveList, matched[0].channel)
+          play(matched[0].channel, { playlist, matchContext })
           return
         }
         if (matched.length > 1) {
@@ -152,7 +152,7 @@ function SportsHeroBannerBase({ matches }: Props) {
           setPickerData({
             match: current,
             options: matched,
-            liveList: effectivePlaylist,
+            liveList,
           })
           return
         }
@@ -163,7 +163,8 @@ function SportsHeroBannerBase({ matches }: Props) {
       const fallbackMatched = findAllMatchingLiveChannels(liveList, fallbackTargets)
 
       if (fallbackMatched.length === 1) {
-        play(fallbackMatched[0].channel, { playlist: effectivePlaylist, matchContext })
+        const playlist = buildSportsPlaylist(liveList, fallbackMatched[0].channel)
+        play(fallbackMatched[0].channel, { playlist, matchContext })
         return
       }
 
@@ -171,14 +172,15 @@ function SportsHeroBannerBase({ matches }: Props) {
         setPickerData({
           match: current,
           options: fallbackMatched,
-          liveList: effectivePlaylist,
+          liveList,
         })
         return
       }
 
       const found = findBestLiveChannel(liveList, fallbackTargets)
       if (found) {
-        play(found, { playlist: effectivePlaylist, matchContext })
+        const playlist = buildSportsPlaylist(liveList, found)
+        play(found, { playlist, matchContext })
       } else {
         alert(`Nenhum dos canais de transmissão (${fallbackTargets.join(', ')}) foi encontrado na sua lista IPTV ativa.`)
       }
@@ -639,8 +641,9 @@ function SportsHeroBannerBase({ matches }: Props) {
             const list = pickerData.liveList
             const match = pickerData.match
             setPickerData(null)
+            const playlist = buildSportsPlaylist(list, ch)
             play(ch, {
-              playlist: list,
+              playlist,
               matchContext: {
                 leagueId: match.leagueId,
                 matchId: match.id,

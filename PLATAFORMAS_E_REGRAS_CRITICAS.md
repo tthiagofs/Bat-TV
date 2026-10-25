@@ -130,10 +130,11 @@
    - Sem salto circular infinito: ao chegar no último canal para baixo, permanece no último; ao chegar no primeiro para cima, permanece no primeiro.
    - Sempre executa `scrollIntoView({ block: 'nearest', behavior: 'smooth' })` para manter o canal focado na tela visível.
 
-2. **Otimização Crítica de Canais ao Abrir Jogo pelo Hub de Esportes**:
-   - **NUNCA passar a lista bruta com 10.000 canais IPTV** no parâmetro `playlist` do `play()`. Isso fazia o menu de canais (QuickZap) travar o hardware do Fire TV Stick por sobrecarga de nós DOM.
-   - A lista de canais transmitidos deve ser filtrada para canais esportivos (`effectivePlaylist`) antes de enviar ao Player.
-   - Tanto em `Player.tsx` quanto em `PwaPlayer.tsx`, a lista do QuickZap possui um limitador de segurança `.slice(0, 100)` para garantir renderização instantânea sem congelamento.
+2. **Otimização Crítica e Pureza da Lista de Canais ao Abrir Jogo pelo Hub de Esportes (`sportsPlaylist.ts`)**:
+   - **NUNCA passar a lista bruta com 10.000 canais IPTV** no parâmetro `playlist` do `play()`.
+   - **NUNCA poluir a lista de esportes com canais generalistas ou de notícias**: A função `buildSportsPlaylist` aplica filtro rigoroso que exclui terminantemente canais como `GloboNews`, `Record News`, `BandNews`, `Jovem Pan`, novelas e canais abertos regionais.
+   - O player de esportes exibe uma lista limpa, estritamente de esportes, priorizada por relevância (`SporTV`, `Premiere`, `ESPN`, `CazéTV`, `BandSports`, etc.), com o canal em reprodução fixado no topo.
+   - Tanto em `Player.tsx` quanto em `PwaPlayer.tsx`, o QuickZap renderiza com alta performance instantânea.
 
 3. **Alerta de Gols Simultâneos do Mesmo Campeonato (`GoalNotificationBanner.tsx`)**:
    - Ao reproduzir uma partida ao vivo pelo Hub de Esportes, é passado `matchContext` contendo `leagueId`, `matchId` e `leagueName`.
@@ -141,13 +142,11 @@
    - Quando sai gol em outro jogo do mesmo campeonato, um banner flutuante discreto e moderno surge no canto da tela por exatamente 5 segundos e desaparece automaticamente.
    - Não dispara alerta para gols da partida que o usuário já está assistindo na tela.
 
-4. **Vínculo Direto com Emissora Exata e Tabela De-Para (`broadcasterMapper.ts`)**:
-   - Cada jogo do dia possui metadados de transmissão exata: `broadcaster` (ex: `"ESPN 2"` ou `"Premiere 2"`), `broadcasters` e `hasExactBroadcast`.
-   - Uma tabela De-Para oficial (`BROADCASTER_MAPPING_TABLE`) associa cada emissora/streaming a seu `canonicalId`, aliases no IPTV e `excludeTokens` rigorosos (para evitar que Premiere 3 bata em Premiere 2, ou SBT News em SBT).
-   - **Comportamento do clique**:
-     - Se o confronto possuir 1 canal exato mapeado e presente na lista do usuário (ex: ESPN 2): **pula a tela intermediária e abre o player DIRETO no canal correto**.
-     - Se houver mais de uma opção oficial para a partida (ex: Disney+ e ESPN, ou Premiere e Globo): se o usuário tiver ambas na lista, abre um modal limpo oferecendo **exclusivamente as opções daquele jogo** (sem poluir com outros canais da liga). Se tiver apenas uma, abre direto.
-     - Fallback inteligente: se o canal exato não existir na lista ou for partida futura sem escala definida, exibe os canais relacionados disponíveis.
+4. **Vínculo Direto com Emissora Exata e Tabela De-Para (`broadcasterMapper.ts` e `channelMatcher.ts`)**:
+   - Cada jogo do dia possui metadados de transmissão: `broadcaster` (ex: `"ESPN 2"` ou `"Premiere 2"`), `broadcasters` e `hasExactBroadcast`.
+   - **Busca por Evento (`findChannelByMatchTeams`)**: Antes de recorrer a nomes genéricos, o app verifica se existe um canal no IPTV nomeado com os dois times da partida (ex: `"PREMIERE 2 - CRUZEIRO X REMO"`). Se existir, entra direto nele.
+   - **Sem Expansão Artificial de Subcanais**: O app NUNCA expande `"Premiere"` em `"Premiere 1, 2, 3, 4, 5"` para forçar o usuário a adivinhar. Se o canal for Premiere, vai direto ao canal Premiere principal sem modal.
+   - **Modal apenas para plataformas diferentes**: Se um jogo passar simultaneamente em duas plataformas oficiais distintas (ex: `"Disney+"` e `"ESPN 4"`, ou `"Globo"` e `"Premiere"`), o modal exibirá exclusivamente essas 2 opções. Se o usuário tiver apenas uma, vai direto sem modal.
 
 ---
 

@@ -183,43 +183,12 @@ export function findAllMatchingLiveChannels(
   for (const raw of cleanedTargets) {
     const low = raw.toLowerCase()
 
-    const hasSpecificSubchannel = /\b([2-9]|extra)\b/i.test(low)
-
     if (low.includes('espn')) {
-      if (hasSpecificSubchannel) {
-        subTargets.push({ displayGroup: raw, searchTarget: low })
-      } else {
-        subTargets.push(
-          { displayGroup: 'ESPN', searchTarget: 'espn' },
-          { displayGroup: 'ESPN 2', searchTarget: 'espn 2' },
-          { displayGroup: 'ESPN 3', searchTarget: 'espn 3' },
-          { displayGroup: 'ESPN 4', searchTarget: 'espn 4' },
-          { displayGroup: 'ESPN 5', searchTarget: 'espn 5' },
-          { displayGroup: 'ESPN 6', searchTarget: 'espn 6' }
-        )
-      }
+      subTargets.push({ displayGroup: raw, searchTarget: low })
     } else if (low.includes('premiere')) {
-      if (hasSpecificSubchannel) {
-        subTargets.push({ displayGroup: raw, searchTarget: low })
-      } else {
-        subTargets.push(
-          { displayGroup: 'Premiere Clubes', searchTarget: 'premiere' },
-          { displayGroup: 'Premiere 2', searchTarget: 'premiere 2' },
-          { displayGroup: 'Premiere 3', searchTarget: 'premiere 3' },
-          { displayGroup: 'Premiere 4', searchTarget: 'premiere 4' },
-          { displayGroup: 'Premiere 5', searchTarget: 'premiere 5' }
-        )
-      }
+      subTargets.push({ displayGroup: raw, searchTarget: low })
     } else if (low.includes('sportv') || low.includes('spor tv')) {
-      if (hasSpecificSubchannel) {
-        subTargets.push({ displayGroup: raw, searchTarget: low })
-      } else {
-        subTargets.push(
-          { displayGroup: 'SporTV', searchTarget: 'sportv' },
-          { displayGroup: 'SporTV 2', searchTarget: 'sportv 2' },
-          { displayGroup: 'SporTV 3', searchTarget: 'sportv 3' }
-        )
-      }
+      subTargets.push({ displayGroup: raw, searchTarget: low })
     } else if (low.includes('caze') || low.includes('cazé')) {
       subTargets.push({ displayGroup: 'CazéTV', searchTarget: 'cazetv' })
     } else if (low.includes('record')) {
@@ -233,11 +202,7 @@ export function findAllMatchingLiveChannels(
     } else if (low.includes('band')) {
       subTargets.push({ displayGroup: 'Band', searchTarget: 'band' })
     } else if (low.includes('tnt')) {
-      subTargets.push(
-        { displayGroup: 'TNT Sports', searchTarget: 'tnt' },
-        { displayGroup: 'Space', searchTarget: 'space' },
-        { displayGroup: 'Max', searchTarget: 'max' }
-      )
+      subTargets.push({ displayGroup: 'TNT Sports', searchTarget: 'tnt' })
     } else if (low.includes('space')) {
       subTargets.push({ displayGroup: 'Space', searchTarget: 'space' })
     } else if (low.includes('max') || low.includes('hbo')) {
