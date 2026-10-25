@@ -9,6 +9,7 @@ import type { MediaItem } from '../types'
 import type { HistoryEntry } from '../services/profileDb'
 import { trailerCoordinator } from '../services/trailerCoordinator'
 import { searchTitleInCatalog } from '../services/catalog'
+import { buildSportsPlaylist } from '../utils/sportsPlaylist'
 
 interface PlayOpts {
   /** Lista usada na troca rápida de canais (ao vivo) */
@@ -430,7 +431,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               channelVariants={channelVariants}
               channelsList={live}
               matchContext={current.matchContext}
-              onSelectChannel={(ch) => play(ch, { playlist })}
+              onSelectChannel={(ch) => {
+                const updatedPlaylist = current.matchContext
+                  ? buildSportsPlaylist(live, ch)
+                  : playlist
+                play(ch, { playlist: updatedPlaylist, matchContext: current.matchContext })
+              }}
             />
           ) : (
             <Player
@@ -451,7 +457,12 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
               channelVariants={channelVariants}
               channelsList={live}
               matchContext={current.matchContext}
-              onSelectChannel={(ch) => play(ch, { playlist })}
+              onSelectChannel={(ch) => {
+                const updatedPlaylist = current.matchContext
+                  ? buildSportsPlaylist(live, ch)
+                  : playlist
+                play(ch, { playlist: updatedPlaylist, matchContext: current.matchContext })
+              }}
             />
           )}
         </ErrorBoundary>

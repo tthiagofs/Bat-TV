@@ -133,8 +133,12 @@
 2. **Otimização Crítica e Pureza da Lista de Canais ao Abrir Jogo pelo Hub de Esportes (`sportsPlaylist.ts`)**:
    - **NUNCA passar a lista bruta com 10.000 canais IPTV** no parâmetro `playlist` do `play()`.
    - **NUNCA poluir a lista de esportes com canais generalistas ou de notícias**: A função `buildSportsPlaylist` aplica filtro rigoroso que exclui terminantemente canais como `GloboNews`, `Record News`, `BandNews`, `Jovem Pan`, novelas e canais abertos regionais.
-   - O player de esportes exibe uma lista limpa, estritamente de esportes, priorizada por relevância (`SporTV`, `Premiere`, `ESPN`, `CazéTV`, `BandSports`, etc.), com o canal em reprodução fixado no topo.
-   - Tanto em `Player.tsx` quanto em `PwaPlayer.tsx`, o QuickZap renderiza com alta performance instantânea.
+   - **Canais Disney+ e Star+ Incluídos**: Todos os canais de eventos e transmissões esportivas `Disney+` e `Star+` da lista IPTV são incluídos na categoria esportiva, excluindo canais infantis (`Disney Channel`, `Disney Junior`, `Disney XD`).
+   - **Ordenação Inteligente por Família de Canais na Gaveta**:
+     - Se o usuário está assistindo a um canal **ESPN**, a gaveta lista o canal ativo no topo e, imediatamente abaixo, todos os outros canais da família **ESPN (1 a 6, Extra)** e **Disney+ / Star+**, seguidos das demais famílias.
+     - Se estiver em **Premiere**, todos os outros canais **Premiere (2 a 9, Clubes)** surgem primeiro.
+     - Se estiver em **SporTV**, os outros **SporTV (2, 3)** surgem primeiro.
+   - Ao trocar de canal pela gaveta do player, o `matchContext` é preservado e a gaveta é reorganizada dinamicamente em torno do novo canal selecionado.
 
 3. **Alerta de Gols Simultâneos do Mesmo Campeonato (`GoalNotificationBanner.tsx`)**:
    - Ao reproduzir uma partida ao vivo pelo Hub de Esportes, é passado `matchContext` contendo `leagueId`, `matchId` e `leagueName`.
@@ -144,7 +148,8 @@
 
 4. **Vínculo Direto com Emissora Exata e Tabela De-Para (`broadcasterMapper.ts` e `channelMatcher.ts`)**:
    - Cada jogo do dia possui metadados de transmissão: `broadcaster` (ex: `"ESPN 2"` ou `"Premiere 2"`), `broadcasters` e `hasExactBroadcast`.
-   - **Busca por Evento (`findChannelByMatchTeams`)**: Antes de recorrer a nomes genéricos, o app verifica se existe um canal no IPTV nomeado com os dois times da partida (ex: `"PREMIERE 2 - CRUZEIRO X REMO"`). Se existir, entra direto nele.
+   - **Busca Inteligente por Evento (`findChannelByMatchTeams`)**: Utiliza `getTeamSearchKeywords` para analisar palavras-chave e apelidos dos dois clubes (ex: `athletic`, `bilbao`, `getafe`, `cruzeiro`, `galo`). Se o IPTV tiver um canal de evento dedicado (ex: `DISNEY+ 03: ATHLETIC X GETAFE` ou `PREMIERE 2 - CRUZEIRO X REMO`), abre direto sem perguntas.
+   - **Mapeamento de ESPN+ para Disney+**: No Brasil, transmissões rotuladas pela API como `ESPN+` (streaming dos EUA) são transmitidas pelo `Disney+`. Elas nunca devem ser direcionadas erroneamente para o canal linear `ESPN 1`.
    - **Sem Expansão Artificial de Subcanais**: O app NUNCA expande `"Premiere"` em `"Premiere 1, 2, 3, 4, 5"` para forçar o usuário a adivinhar. Se o canal for Premiere, vai direto ao canal Premiere principal sem modal.
    - **Modal apenas para plataformas diferentes**: Se um jogo passar simultaneamente em duas plataformas oficiais distintas (ex: `"Disney+"` e `"ESPN 4"`, ou `"Globo"` e `"Premiere"`), o modal exibirá exclusivamente essas 2 opções. Se o usuário tiver apenas uma, vai direto sem modal.
 

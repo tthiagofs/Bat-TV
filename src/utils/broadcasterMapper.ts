@@ -172,7 +172,33 @@ export const BROADCASTER_MAPPING_TABLE: Record<string, BroadcasterMapping> = {
   'Disney+': {
     canonicalId: 'iptv_disney_plus',
     displayName: 'Disney+',
-    aliases: ['disney+', 'disney plus', 'disney', 'star+', 'star plus'],
+    aliases: [
+      'disney+',
+      'disney +',
+      'disney plus',
+      'star+',
+      'star +',
+      'star plus',
+      'disney 1',
+      'disney 2',
+      'disney+ 1',
+      'disney+ 01',
+      'disney+ 2',
+      'disney+ 02',
+      'star+ 1',
+      'star+ 01',
+      'disney',
+      'star',
+    ],
+    excludeTokens: [
+      'disney junior',
+      'disney channel',
+      'disney xd',
+      'junior',
+      'kids',
+      'infantil',
+      'desenho',
+    ],
   },
   'Max': {
     canonicalId: 'iptv_max',
@@ -202,7 +228,16 @@ export function getCanonicalBroadcasterKey(broadcasterName: string): string {
 
   const low = trimmed.toLowerCase()
 
-  if (low.includes('disney') || low.includes('star+')) return 'Disney+'
+  if (
+    low.includes('disney') ||
+    low.includes('star+') ||
+    low.includes('star plus') ||
+    low.includes('star +') ||
+    low.includes('espn+') ||
+    low.includes('espn plus')
+  ) {
+    return 'Disney+'
+  }
   if (low.includes('caze') || low.includes('cazé')) return 'CazéTV'
   if (low.includes('goat')) return 'Canal GOAT'
   if (low.includes('paramount')) return 'Paramount+'

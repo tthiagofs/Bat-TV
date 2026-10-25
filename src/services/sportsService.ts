@@ -357,7 +357,7 @@ function normalizeBroadcastName(raw: string): string | null {
   const s = raw.trim()
   const low = s.toLowerCase()
 
-  if (low.includes('disney') || low.includes('star+') || low.includes('star plus')) return 'Disney+'
+  if (low.includes('espn+') || low.includes('espn plus') || low.includes('disney') || low.includes('star+') || low.includes('star plus')) return 'Disney+'
   if (low.includes('caze') || low.includes('cazé')) return 'CazéTV'
   if (low.includes('goat')) return 'Canal GOAT'
   if (low.includes('paramount')) return 'Paramount+'
@@ -564,7 +564,7 @@ function parseEspnEvent(event: Json, leagueSlug: string): Match | null {
     hasExactBroadcast = true
   } else if (leagueSlug === 'esp.1') {
     if (exactBroadcasters.length === 0) {
-      exactBroadcasters = ['ESPN', 'Disney+']
+      exactBroadcasters = ['Disney+', 'ESPN']
       hasExactBroadcast = true
     }
   } else if (leagueSlug === 'uefa.champions') {
