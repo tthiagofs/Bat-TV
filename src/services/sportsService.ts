@@ -48,7 +48,7 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'bra.1',
     name: 'Brasileirão Série A',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/85.png',
-    tv: ['Premiere', 'SporTV', 'Globo', 'Record TV', 'CazéTV'],
+    tv: ['Premiere', 'SporTV', 'Globo', 'Record TV'],
   },
   'bra.2': {
     slug: 'bra.2',
@@ -84,7 +84,7 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'uefa.europa',
     name: 'UEFA Europa League',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/2310.png',
-    tv: ['ESPN', 'CazéTV'],
+    tv: ['ESPN 4', 'Disney+', 'ESPN'],
   },
   'eng.1': {
     slug: 'eng.1',
@@ -108,13 +108,13 @@ export const MAIN_LEAGUES: Record<string, { slug: string; name: string; badge: s
     slug: 'ger.1',
     name: 'Bundesliga',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/10.png',
-    tv: ['CazéTV', 'SporTV', 'Canal GOAT'],
+    tv: ['SporTV', 'Canal GOAT', 'Disney+'],
   },
   'fra.1': {
     slug: 'fra.1',
     name: 'Ligue 1',
     badge: 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png',
-    tv: ['CazéTV', 'ESPN'],
+    tv: ['Disney+', 'ESPN 4', 'ESPN', 'ESPN 2'],
   },
 }
 

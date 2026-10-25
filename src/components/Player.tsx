@@ -1536,14 +1536,45 @@ export default function Player({
     >
 
       {isYouTube ? (
-        <iframe
-          key={activeUrl}
-          src={activeUrl}
-          title={title}
-          className="w-full h-full border-0 absolute inset-0 z-10"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
+        <div className="w-full h-full absolute inset-0 z-10 bg-black flex flex-col items-center justify-center p-6 text-center select-none">
+          <div className="max-w-md w-full bg-zinc-900/95 border border-white/10 rounded-3xl p-6 sm:p-8 flex flex-col items-center gap-5 shadow-2xl backdrop-blur-md">
+            <div className="w-16 h-16 rounded-2xl bg-red-600/20 border border-red-500/40 flex items-center justify-center text-red-500 shadow-lg">
+              <svg className="w-9 h-9 fill-current" viewBox="0 0 24 24">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-extrabold text-white">{title || 'CazéTV (Ao Vivo no YouTube)'}</h2>
+              <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                A transmissão oficial é fornecida gratuitamente pelo canal da CazéTV no YouTube.
+              </p>
+            </div>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                const target = activeUrl.includes('/watch?v=')
+                  ? activeUrl
+                  : activeUrl.replace('youtube-nocookie.com/embed/', 'youtube.com/watch?v=').replace('youtube.com/embed/', 'youtube.com/watch?v=')
+                if (Capacitor.isNativePlatform()) {
+                  window.open(target, '_system')
+                } else {
+                  window.open(target, '_blank')
+                }
+              }}
+              className="w-full py-3.5 px-6 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-sm shadow-xl hover:scale-105 active:scale-95 transition cursor-pointer flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-red-500"
+            >
+              <span>▶ Abrir no YouTube Oficial</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-xs text-zinc-400 hover:text-white underline cursor-pointer"
+            >
+              Voltar aos Canais
+            </button>
+          </div>
+        </div>
       ) : !isNative ? (
         <video
           ref={videoRef}

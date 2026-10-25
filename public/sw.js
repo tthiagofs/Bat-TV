@@ -135,12 +135,14 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone()
+            const copy1 = networkResponse.clone()
+            const copy2 = networkResponse.clone()
+            const copy3 = networkResponse.clone()
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, copy)
-              cache.put('/index.html', copy.clone())
-              cache.put('/', copy.clone())
-            })
+              cache.put(event.request, copy1).catch(() => {})
+              cache.put('/index.html', copy2).catch(() => {})
+              cache.put('/', copy3).catch(() => {})
+            }).catch(() => {})
           }
           return networkResponse
         })

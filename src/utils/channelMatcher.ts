@@ -329,12 +329,8 @@ export function buildMatchChannelOptions(
   ].join(' ').toLowerCase()
 
   const isCazeMatch =
-    allHintsText.includes('caze') ||
-    allHintsText.includes('cazé') ||
-    match.leagueId === 'fra.1' ||
-    match.leagueId === 'ger.1' ||
-    allHintsText.includes('ligue 1') ||
-    allHintsText.includes('bundesliga')
+    rawBroadcasters.some((b) => b.toLowerCase().includes('caze') || b.toLowerCase().includes('cazé')) ||
+    Boolean(match.broadcaster && (match.broadcaster.toLowerCase().includes('caze') || match.broadcaster.toLowerCase().includes('cazé')))
 
   const isEspnMatch =
     allHintsText.includes('espn') ||

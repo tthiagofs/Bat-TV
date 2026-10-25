@@ -7,7 +7,7 @@ import { getItems } from '../services/catalog'
 
 import { buildMatchChannelOptions, type MatchedChannelOption } from '../utils/channelMatcher'
 import { buildSportsPlaylist } from '../utils/sportsPlaylist'
-import { getCazeTvLiveEmbedUrl, createCazeTvVirtualChannel } from '../services/cazeTvService'
+import { openCazeTvLive } from '../services/cazeTvService'
 import SportsChannelPickerModal from './SportsChannelPickerModal'
 import type { MediaItem } from '../types'
 import stadium1 from '../assets/stadiums/stadium1.jpg'
@@ -587,12 +587,7 @@ function SportsHeroBannerBase({ matches }: Props) {
             }
 
             if (isVirtual || ch.id === 999901 || ch.key === 'youtube:cazetv') {
-              const youtubeEmbedUrl = await getCazeTvLiveEmbedUrl()
-              const cazeVirtual = createCazeTvVirtualChannel(youtubeEmbedUrl)
-              play(cazeVirtual, {
-                playlist: [cazeVirtual, ...buildSportsPlaylist(list)],
-                matchContext,
-              })
+              openCazeTvLive()
               return
             }
 
