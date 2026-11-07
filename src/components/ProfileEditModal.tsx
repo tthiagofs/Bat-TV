@@ -336,7 +336,20 @@ export default function ProfileEditModal({ profile, onClose }: Props) {
                   <Globe size={14} className="text-sky-400" />
                   Proxy de Vídeo (Cloudflare Worker)
                 </span>
-                <span className="text-[10px] text-zinc-500 font-normal">Opcional</span>
+                <span className="flex items-center gap-2">
+                  {customProxy ? (
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      onClick={() => setCustomProxyInput('')}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 underline font-normal cursor-pointer"
+                    >
+                      Remover / Usar Vercel
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500 font-normal">Opcional</span>
+                  )}
+                </span>
               </label>
               <input
                 type="url"

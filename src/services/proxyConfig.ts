@@ -27,20 +27,6 @@ export function setCustomProxy(url: string) {
   } catch {}
 }
 
-export function getWorkerEndpoint(): string {
-  // 1. Prioridade 1: Proxy customizado salvo no navegador
-  const custom = getCustomProxy()
-  if (custom) return custom
-
-  // 2. Prioridade 2: Variável de ambiente VITE_PROXY_URL configurada na Vercel (.env)
-  const envProxy = import.meta.env.VITE_PROXY_URL
-  if (envProxy && typeof envProxy === 'string' && envProxy.trim()) {
-    return envProxy.trim().replace(/\/+$/, '')
-  }
-
-  return ''
-}
-
 export function getLocalProxyEndpoint(): string {
   const path = import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
   if (typeof window !== 'undefined' && window.location.origin && window.location.origin.startsWith('http')) {
@@ -49,69 +35,36 @@ export function getLocalProxyEndpoint(): string {
   return path
 }
 
-export function getProxyEndpoint(): string {
-  const worker = getWorkerEndpoint()
-  if (worker) return worker
-  return import.meta.env.DEV ? '/iptv-proxy' : '/api/proxy'
-}
+export function getProxyEndpoint(forceLocal = false): string {
+  if (!forceLocal) {
+    // 1. Prioridade 1: Proxy customizado salvo no navegador (se configurado pelo usuário)
+    const custom = getCustomProxy()
+    if (custom) return custom
 
-/**
- * Verifica se a URL pode ir diretamente para o Cloudflare Worker sem precisar
- * resolver redirecionamento 302 no auth router do servidor IPTV.
- * Servidores Xtream (como auth.xplist.vip) bloqueiam o IP sintético do Cloudflare Worker (erro 500)
- * na rota inicial de stream (/live/, /movie/, /series/), mas os servidores finais de mídia
- * (/vauth/, /rauth/, IPs de storage) aceitam o Cloudflare Worker normalmente com banda ilimitada.
- */
-function isDirectWorkerCompatible(url: string): boolean {
-  const lower = url.toLowerCase()
-  if (
-    lower.includes('player_api.php') ||
-    lower.includes('xmltv.php') ||
-    lower.includes('site.api.espn.com') ||
-    lower.includes('youtube.com') ||
-    lower.includes('googlevideo.com')
-  ) {
-    return true
-  }
-  try {
-    const u = new URL(url)
-    if (
-      u.pathname.includes('/vauth/') ||
-      u.pathname.includes('/rauth/') ||
-      u.hostname.endsWith('.nip.io') ||
-      /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(u.hostname)
-    ) {
-      return true
+    // 2. Prioridade 2: Variável de ambiente VITE_PROXY_URL configurada na Vercel (.env)
+    const envProxy = import.meta.env.VITE_PROXY_URL
+    if (envProxy && typeof envProxy === 'string' && envProxy.trim()) {
+      return envProxy.trim().replace(/\/+$/, '')
     }
-  } catch {}
-  return false
+  }
+
+  // 3. Fallback: Proxy local (Vercel /api/proxy ou Vite /iptv-proxy)
+  return getLocalProxyEndpoint()
 }
 
 export interface BuildProxyOptions {
+  forceLocal?: boolean
   forceLocalProxy?: boolean
 }
 
 export function buildProxyUrl(rawUrl: string, options?: BuildProxyOptions): string {
   if (!rawUrl) return ''
   const normalized = rawUrl.trim().replace(/^https?:/i, (m) => m.toLowerCase())
-  const localEndpoint = getLocalProxyEndpoint()
-
-  if (options?.forceLocalProxy) {
-    return `${localEndpoint}?url=${encodeURIComponent(normalized)}`
+  const shouldForceLocal = Boolean(options?.forceLocal || options?.forceLocalProxy)
+  const endpoint = getProxyEndpoint(shouldForceLocal)
+  const path = `${endpoint}?url=${encodeURIComponent(normalized)}`
+  if (typeof window !== 'undefined' && path.startsWith('/') && window.location.origin) {
+    return `${window.location.origin}${path}`
   }
-
-  const worker = getWorkerEndpoint()
-  if (!worker) {
-    return `${localEndpoint}?url=${encodeURIComponent(normalized)}`
-  }
-
-  // APIs (catálogo, EPG, esportes) e URLs de storage já resolvidas vão direto ao Worker
-  if (isDirectWorkerCompatible(normalized)) {
-    return `${worker}?url=${encodeURIComponent(normalized)}`
-  }
-
-  // Streams de vídeo (/live/, /movie/, /series/) resolvem o 302 inicial via /api/proxy (IPv4)
-  // e fazem handoff automático (302) para o Cloudflare Worker fazer o streaming sem gastar banda da Vercel
-  return `${localEndpoint}?worker=${encodeURIComponent(worker)}&url=${encodeURIComponent(normalized)}`
+  return path
 }
-

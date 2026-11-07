@@ -49,6 +49,8 @@ interface PlaybackValue {
   play: (item: MediaItem, opts?: PlayOpts) => Promise<void>
   playLocalMedia: (opts: { id: string; title: string; url: string; poster?: string }) => void
   error: string
+  current: Current | null
+  isPlaying: boolean
 }
 
 const Ctx = createContext<PlaybackValue | null>(null)
@@ -386,7 +388,7 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <Ctx.Provider value={{ play, playLocalMedia, error }}>
+    <Ctx.Provider value={{ play, playLocalMedia, error, current, isPlaying: Boolean(current) }}>
       <div id="app-shell-wrapper" style={{ display: current ? 'none' : 'contents' }}>
         {children}
       </div>

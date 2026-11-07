@@ -27,11 +27,16 @@ async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
   const maxRedirects = 8
 
   while (redirects < maxRedirects) {
-    const res = await fetch(curUrl, {
-      method: requestMethod,
-      headers: headers,
-      redirect: 'manual',
-    })
+    let res
+    try {
+      res = await fetch(curUrl, {
+        method: requestMethod,
+        headers: headers,
+        redirect: 'manual',
+      })
+    } catch {
+      break
+    }
 
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       const loc = res.headers.get('location')
@@ -43,10 +48,15 @@ async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
       }
     }
 
+    // Se for opaqueredirect (status 0) do Cloudflare sem a flag redirect_manual, sai para o fallback 'follow'
+    if (res.status === 0 || res.type === 'opaqueredirect') {
+      break
+    }
+
     return { response: res, finalUrl: curUrl }
   }
 
-  // Se exceder, tenta seguir direto
+  // Fallback seguro caso o runtime retorne status 0 em manual redirect
   const res = await fetch(curUrl, { method: requestMethod, headers, redirect: 'follow' })
   return { response: res, finalUrl: curUrl }
 }
@@ -171,9 +181,14 @@ export default {
         }
       }
 
+      const responseStatus =
+        originResponse.status && originResponse.status >= 200 && originResponse.status <= 599
+          ? originResponse.status
+          : 200
+
       return new Response(originResponse.body, {
-        status: originResponse.status,
-        statusText: originResponse.statusText,
+        status: responseStatus,
+        statusText: originResponse.statusText || 'OK',
         headers: responseHeaders,
       })
     } catch (err) {
