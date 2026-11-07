@@ -21,41 +21,36 @@ export default function handler(req, res) {
     const movieUrl = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
     return (async () => {
       const results = {}
-      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || '201.17.216.236'
 
-      // Test 1: fetch() with X-Forwarded-For & X-Real-IP
+      // Test 1: fetch() with IPv4 X-Forwarded-For
       try {
         const f1 = await fetch(movieUrl, {
           redirect: 'manual',
           headers: {
             'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-            'X-Forwarded-For': clientIp,
-            'X-Real-IP': clientIp,
-            'CF-Connecting-IP': clientIp,
+            'X-Forwarded-For': '201.17.216.236',
+            'X-Real-IP': '201.17.216.236',
+            'Client-IP': '201.17.216.236',
+            'True-Client-IP': '201.17.216.236',
           }
         })
-        results.test_forwarded_ip = { status: f1.status, location: f1.headers.get('location') }
+        results.test_ipv4_forwarded = { status: f1.status, location: f1.headers.get('location') }
       } catch (e) {
-        results.test_forwarded_ip = { error: e.message }
+        results.test_ipv4_forwarded = { error: e.message }
       }
 
-      // Test 2: fetch() with curl User-Agent
+      // Test 2: fetch() with Host header explicitly set
       try {
         const f2 = await fetch(movieUrl, {
           redirect: 'manual',
-          headers: { 'User-Agent': 'curl/8.4.0' }
+          headers: {
+            'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
+            'Host': 'auth.xplist.vip',
+          }
         })
-        results.test_curl_ua = { status: f2.status, location: f2.headers.get('location') }
+        results.test_host_header = { status: f2.status, location: f2.headers.get('location') }
       } catch (e) {
-        results.test_curl_ua = { error: e.message }
-      }
-
-      // Test 3: fetch() without headers
-      try {
-        const f3 = await fetch(movieUrl, { redirect: 'manual' })
-        results.test_no_headers = { status: f3.status, location: f3.headers.get('location') }
-      } catch (e) {
-        results.test_no_headers = { error: e.message }
+        results.test_host_header = { error: e.message }
       }
 
       res.statusCode = 200
