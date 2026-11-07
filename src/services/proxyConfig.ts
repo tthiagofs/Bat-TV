@@ -46,11 +46,16 @@ export function getProxyEndpoint(forceLocal = false): string {
   if (!forceLocal) {
     // 1. Prioridade 1: Proxy customizado salvo no navegador (se configurado pelo usuário)
     const custom = getCustomProxy()
-    if (custom) return custom
+    if (custom && !custom.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')) return custom
 
     // 2. Prioridade 2: Variável de ambiente VITE_PROXY_URL configurada na Vercel (.env)
     const envProxy = import.meta.env.VITE_PROXY_URL
-    if (envProxy && typeof envProxy === 'string' && envProxy.trim()) {
+    if (
+      envProxy &&
+      typeof envProxy === 'string' &&
+      envProxy.trim() &&
+      !envProxy.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')
+    ) {
       return envProxy.trim().replace(/\/+$/, '')
     }
   }

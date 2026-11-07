@@ -1,8 +1,8 @@
 import http from 'node:http'
 import https from 'node:https'
 
-const agentHttp = new http.Agent({ keepAlive: false })
-const agentHttps = new https.Agent({ keepAlive: false })
+const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
+const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
 
 export default function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
