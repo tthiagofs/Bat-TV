@@ -32,6 +32,55 @@ export default function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Parâmetro url é obrigatório' }))
   }
 
+  if (req.query?.diag || (req.url && req.url.includes('diag=1'))) {
+    const testUrl = urlParam || 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const diagHeaders = {
+      'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
+      Accept: '*/*',
+    }
+    const client = testUrl.startsWith('https') ? https : http
+    const dReq = client.request(testUrl, { method: 'GET', headers: diagHeaders }, (dRes) => {
+      const loc = dRes.headers.location
+      const result = {
+        step1: {
+          url: testUrl,
+          status: dRes.statusCode,
+          headers: dRes.headers,
+        }
+      }
+      dRes.resume()
+      if (loc) {
+        const nextUrl = new URL(loc, testUrl).toString()
+        const client2 = nextUrl.startsWith('https') ? https : http
+        const dReq2 = client2.request(nextUrl, { method: 'GET', headers: { ...diagHeaders, Range: 'bytes=0-100' } }, (dRes2) => {
+          result.step2 = {
+            url: nextUrl,
+            status: dRes2.statusCode,
+            headers: dRes2.headers,
+          }
+          dRes2.resume()
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(result, null, 2))
+        })
+        dReq2.on('error', (e) => {
+          result.step2Error = e.message
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(result, null, 2))
+        })
+        dReq2.end()
+      } else {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(result, null, 2))
+      }
+    })
+    dReq.on('error', (e) => {
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ step1Error: e.message }, null, 2))
+    })
+    dReq.end()
+    return
+  }
+
   return new Promise((resolve) => {
     let isDone = false
     const finish = () => {
