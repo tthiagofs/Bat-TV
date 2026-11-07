@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Download, Heart, ChevronRight, Settings, Users, LogOut, Film, Tv, Play } from 'lucide-react'
+import { Download, Heart, ChevronRight, Settings, Users, LogOut, Film, Tv, Play, Globe, X, Check } from 'lucide-react'
 import { useProfiles } from '../../context/ProfileContext'
 import { useAuth } from '../../context/AuthContext'
 import { useDownloads } from '../../hooks/useDownloads'
 import { useFavorites } from '../../context/FavoritesContext'
 import { usePlayback } from '../../context/PlaybackContext'
 import { Avatar, DEFAULT_AVATAR } from '../../data/avatars'
+import { getCustomProxy, setCustomProxy } from '../../services/proxyConfig'
 import type { Section, MediaItem } from '../../types'
 
 interface Props {
@@ -23,7 +24,21 @@ export default function MobileMyProfile({
   const { favorites } = useFavorites()
   const { play } = usePlayback()
 
+  const [showProxyModal, setShowProxyModal] = useState(false)
+  const [proxyInput, setProxyInput] = useState(getCustomProxy())
+  const [proxySavedToast, setProxySavedToast] = useState(false)
+
   const completedDownloads = downloads.filter((d) => d.status === 'completed')
+
+  const handleSaveProxy = (newUrl: string) => {
+    setCustomProxy(newUrl)
+    setProxyInput(newUrl.trim())
+    setProxySavedToast(true)
+    setTimeout(() => {
+      setProxySavedToast(false)
+      setShowProxyModal(false)
+    }, 1200)
+  }
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar pb-28 pt-4 px-4 space-y-6 bg-black text-white">
@@ -153,6 +168,26 @@ export default function MobileMyProfile({
           <ChevronRight size={16} className="text-zinc-500" />
         </button>
 
+        {/* Configurações de Conexão e Proxy */}
+        <button
+          onClick={() => {
+            setProxyInput(getCustomProxy())
+            setShowProxyModal(true)
+          }}
+          className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-zinc-900 active:bg-zinc-800 transition text-sm text-zinc-200 cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <Globe size={18} className="text-sky-400" />
+            <div className="text-left">
+              <span className="block font-medium">Configurações de Proxy / Conexão</span>
+              <p className="text-[11px] text-zinc-400">
+                {getCustomProxy() ? 'Cloudflare Worker Ativo' : 'Proxy Vercel (Padrão Ativo)'}
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={16} className="text-zinc-500" />
+        </button>
+
         <button
           onClick={leave}
           className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-zinc-900 active:bg-zinc-800 transition text-sm text-zinc-200"
@@ -183,6 +218,87 @@ export default function MobileMyProfile({
           <span>Sair da Conta</span>
         </button>
       </div>
+
+      {/* Modal de Configuração de Proxy / Servidor de Vídeo */}
+      {showProxyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Globe size={20} className="text-sky-400" />
+                <h3 className="font-bold text-base text-white">Proxy de Streaming e Conexão</h3>
+              </div>
+              <button
+                onClick={() => setShowProxyModal(false)}
+                className="p-1 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 space-y-1">
+                <p className="text-xs font-semibold text-zinc-200">
+                  Status Atual: {getCustomProxy() ? (
+                    <span className="text-sky-400 font-bold">Cloudflare Worker Externo</span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold">Servidor Vercel (Padrão)</span>
+                  )}
+                </p>
+                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  Por padrão, as transmissões utilizam o proxy seguro da Vercel. Caso possua um Cloudflare Worker com tráfego ilimitado configurado, insira o link abaixo.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1.5">
+                  URL do Cloudflare Worker (Opcional):
+                </label>
+                <input
+                  type="url"
+                  value={proxyInput}
+                  onChange={(e) => setProxyInput(e.target.value)}
+                  placeholder="https://meu-worker.workers.dev"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              {proxySavedToast && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs">
+                  <Check size={16} /> Configurações salvas com sucesso!
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => handleSaveProxy('')}
+                className="text-xs text-rose-400 hover:text-rose-300 underline font-medium cursor-pointer"
+              >
+                Restaurar Padrão Vercel
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProxyModal(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveProxy(proxyInput)}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white shadow"
+                >
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

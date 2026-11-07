@@ -10,7 +10,14 @@ const STORAGE_KEY = 'iptv-rea:custom-proxy'
 export function getCustomProxy(): string {
   if (typeof window === 'undefined') return ''
   try {
-    return (localStorage.getItem(STORAGE_KEY) || '').trim()
+    const saved = (localStorage.getItem(STORAGE_KEY) || '').trim()
+    // Se o usuário tiver salvo o worker antigo que estava com erro 500 (bat-tv-proxy.thiagofelipefreire.workers.dev),
+    // remove automaticamente para restaurar a reprodução imediata via proxy Vercel
+    if (saved && saved.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')) {
+      localStorage.removeItem(STORAGE_KEY)
+      return ''
+    }
+    return saved
   } catch {
     return ''
   }

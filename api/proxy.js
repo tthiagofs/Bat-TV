@@ -17,44 +17,6 @@ export default function handler(req, res) {
     return res.end()
   }
 
-  if (req.query?.diag === '1') {
-    const movieUrl = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
-    const liveUrl = 'http://auth.xplist.vip/live/thiagofelipe038/r56k25jame/37256.m3u8'
-    return (async () => {
-      const results = {}
-
-      // Test 1: liveUrl with manual redirect
-      try {
-        const f1 = await fetch(liveUrl, {
-          redirect: 'manual',
-          headers: {
-            'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-          }
-        })
-        results.live_manual = { status: f1.status, location: f1.headers.get('location') }
-      } catch (e) {
-        results.live_manual = { error: e.message }
-      }
-
-      // Test 2: liveUrl with follow redirect
-      try {
-        const f2 = await fetch(liveUrl, {
-          redirect: 'follow',
-          headers: {
-            'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-          }
-        })
-        results.live_follow = { status: f2.status, url: f2.url }
-      } catch (e) {
-        results.live_follow = { error: e.message }
-      }
-
-      res.statusCode = 200
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify(results, null, 2))
-    })()
-  }
-
   let urlParam = req.query?.url
   if (Array.isArray(urlParam)) urlParam = urlParam[0]
   if (!urlParam && req.url) {
