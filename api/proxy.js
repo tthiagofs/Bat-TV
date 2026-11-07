@@ -4,7 +4,7 @@ import https from 'node:https'
 const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
 const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
@@ -14,6 +14,37 @@ export default function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end()
+  }
+
+  if (req.query?.diag) {
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '201.17.216.236'
+    const targetMovie = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const results = {}
+    try {
+      const r1 = await fetch(targetMovie, {
+        redirect: 'manual',
+        headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' }
+      })
+      results.plain = { status: r1.status, location: r1.headers.get('location'), body: await r1.text() }
+    } catch (e) {
+      results.plain = { error: e.message }
+    }
+    try {
+      const r2 = await fetch(targetMovie, {
+        redirect: 'manual',
+        headers: {
+          'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
+          'X-Forwarded-For': clientIp,
+          'X-Real-IP': clientIp,
+          'Client-IP': clientIp
+        }
+      })
+      results.withXFF = { clientIp, status: r2.status, location: r2.headers.get('location'), body: await r2.text() }
+    } catch (e) {
+      results.withXFF = { error: e.message }
+    }
+    res.setHeader('Content-Type', 'application/json')
+    return res.end(JSON.stringify(results, null, 2))
   }
 
   let urlParam = req.query?.url
