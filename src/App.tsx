@@ -2,7 +2,7 @@ import { lazy, Suspense, useDeferredValue, useState, useEffect } from 'react'
 import { trailerCoordinator } from './services/trailerCoordinator'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ProfileProvider, useProfiles } from './context/ProfileContext'
-import { PlaybackProvider } from './context/PlaybackContext'
+import { PlaybackProvider, usePlayback } from './context/PlaybackContext'
 import Login from './pages/Login'
 import ProfilesScreen from './pages/ProfilesScreen'
 import Home from './pages/Home'
@@ -28,6 +28,7 @@ const ScreenFallback = () => (
 function Shell() {
   const { active: activeServer, managerOpen } = useAuth()
   const { active: activeProfile } = useProfiles()
+  const { current } = usePlayback()
   const isMobile = useIsMobile(768)
 
   const [isOffline, setIsOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine)
@@ -180,7 +181,7 @@ function Shell() {
                     style={{ display: section === 'home' ? 'flex' : 'none' }}
                     className={`flex-1 min-h-0 flex-col ${section === 'home' ? 'flex' : 'hidden'}`}
                   >
-                    <Home onNavigate={handleSelectSection} onScrollChange={setIsScrolled} isActive={section === 'home'} />
+                    <Home onNavigate={handleSelectSection} onScrollChange={setIsScrolled} isActive={section === 'home' && !current} />
                   </div>
                 )}
                 {visitedSections.has('movies') && (
@@ -191,7 +192,7 @@ function Shell() {
                     <Browse
                       section="movies"
                       query=""
-                      isActive={section === 'movies'}
+                      isActive={section === 'movies' && !current}
                       onScrollChange={setIsScrolled}
                     />
                   </div>
@@ -204,7 +205,7 @@ function Shell() {
                     <Browse
                       section="series"
                       query=""
-                      isActive={section === 'series'}
+                      isActive={section === 'series' && !current}
                       onScrollChange={setIsScrolled}
                     />
                   </div>
