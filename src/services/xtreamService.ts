@@ -182,29 +182,38 @@ export class XtreamService {
         return (await res.json()) as T
       }
 
-      // Se o servidor IPTV respondeu com erro (401, 403, etc), lê a mensagem real retornada pelo painel
+      // Se o servidor IPTV respondeu com erro (401, 403, 500, etc), lê a mensagem retornada
       let errorMsg = ''
       try {
         const errorJson = await res.json()
         if (errorJson?.message) errorMsg = errorJson.message
-      } catch {}
+        else if (errorJson?.error) errorMsg = errorJson.error
+      } catch { }
 
       if (res.status === 401 || res.status === 403) {
-        throw new Error(errorMsg ? `Servidor IPTV: ${errorMsg}` : 'Credenciais inválidas ou lista expirada/suspensa.')
+        if (errorMsg) {
+          throw new Error(`Servidor IPTV (${res.status}): ${errorMsg}. (Nota: Se a lista funciona no APK/Desktop, o servidor IPTV está bloqueando o IP de datacenter da Vercel).`)
+        }
+        throw new Error(`Servidor IPTV rejeitou a conexão (${res.status}). O provedor pode estar bloqueando acessos via nuvem/datacenter. Utilize o aplicativo APK ou Desktop.`)
       }
+
+      if (res.status === 502 || res.status === 504) {
+        throw new Error(`Falha no proxy da Web (${res.status}): ${errorMsg || 'Tempo limite esgotado ou bloqueio de firewall'}. Use a versão APK ou Desktop.`)
+      }
+
       if (errorMsg) {
-        throw new Error(`Servidor IPTV: ${errorMsg}`)
+        throw new Error(`Erro do servidor IPTV (${res.status}): ${errorMsg}`)
       }
     } catch (err: any) {
-      if (err?.message && (err.message.includes('Servidor IPTV') || err.message.includes('Credenciais') || err.message.includes('Banned'))) {
+      if (err?.message && (err.message.includes('Servidor IPTV') || err.message.includes('Falha no proxy') || err.message.includes('Credenciais') || err.message.includes('Banned'))) {
         throw err
       }
     }
 
-    // Se estiver em ambiente HTTPS e a URL for HTTP, não tenta fetch direto para não poluir o console com Mixed Content
+    // Se estiver em ambiente HTTPS e a URL for HTTP, avisa claramente sobre o bloqueio de segurança do navegador
     const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:'
     if (isHttpsPage && fullUrl.startsWith('http:')) {
-      throw new Error(`Não foi possível autenticar no servidor "${this.base}". Verifique se o usuário e senha estão corretos e ativos no provedor.`)
+      throw new Error(`Conexão bloqueada pelo navegador (Mixed Content: HTTPS para HTTP). Para assistir sem bloqueios de segurança web, utilize o APK nativo no celular/TV ou a versão Desktop.`)
     }
 
     const controller = new AbortController()

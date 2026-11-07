@@ -10,7 +10,13 @@ const STORAGE_KEY = 'iptv-rea:custom-proxy'
 export function getCustomProxy(): string {
   if (typeof window === 'undefined') return ''
   try {
-    return (localStorage.getItem(STORAGE_KEY) || '').trim()
+    const saved = (localStorage.getItem(STORAGE_KEY) || '').trim()
+    // Limpa automaticamente workers legados ou quebrados salvos no localStorage
+    if (saved && (saved.includes('bat-tv-proxy.thiagofelipefreire.workers.dev') || !saved.startsWith('http'))) {
+      localStorage.removeItem(STORAGE_KEY)
+      return ''
+    }
+    return saved
   } catch {
     return ''
   }
@@ -43,7 +49,12 @@ export function getProxyEndpoint(forceLocal = false): string {
 
     // 2. Prioridade 2: Variável de ambiente VITE_PROXY_URL configurada na Vercel (.env)
     const envProxy = import.meta.env.VITE_PROXY_URL
-    if (envProxy && typeof envProxy === 'string' && envProxy.trim()) {
+    if (
+      envProxy &&
+      typeof envProxy === 'string' &&
+      envProxy.trim() &&
+      !envProxy.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')
+    ) {
       return envProxy.trim().replace(/\/+$/, '')
     }
   }

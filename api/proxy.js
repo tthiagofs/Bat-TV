@@ -1,8 +1,8 @@
 import http from 'node:http'
 import https from 'node:https'
 
-const agentHttp = new http.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
-const agentHttps = new https.Agent({ keepAlive: true, maxSockets: 100, maxFreeSockets: 20, timeout: 60000 })
+const agentHttp = new http.Agent({ keepAlive: false })
+const agentHttps = new https.Agent({ keepAlive: false })
 
 export default function handler(req, res) {
   // Permite CORS total e cabeçalhos de streaming de vídeo
@@ -219,12 +219,13 @@ export default function handler(req, res) {
           finish()
         })
 
-        proxyReq.setTimeout(55000, () => {
+        proxyReq.setTimeout(14000, () => {
           proxyReq.destroy()
           if (!res.headersSent) {
             res.statusCode = 504
             res.setHeader('Access-Control-Allow-Origin', '*')
-            res.end(JSON.stringify({ error: 'Tempo limite esgotado no servidor IPTV' }))
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'Tempo limite esgotado no servidor IPTV (14s)' }))
           }
           finish()
         })
