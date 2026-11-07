@@ -19,38 +19,34 @@ export default function handler(req, res) {
 
   if (req.query?.diag === '1') {
     const movieUrl = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const liveUrl = 'http://auth.xplist.vip/live/thiagofelipe038/r56k25jame/37256.m3u8'
     return (async () => {
       const results = {}
 
-      // Test 1: fetch() with IPv4 X-Forwarded-For
+      // Test 1: liveUrl with manual redirect
       try {
-        const f1 = await fetch(movieUrl, {
+        const f1 = await fetch(liveUrl, {
           redirect: 'manual',
           headers: {
             'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-            'X-Forwarded-For': '201.17.216.236',
-            'X-Real-IP': '201.17.216.236',
-            'Client-IP': '201.17.216.236',
-            'True-Client-IP': '201.17.216.236',
           }
         })
-        results.test_ipv4_forwarded = { status: f1.status, location: f1.headers.get('location') }
+        results.live_manual = { status: f1.status, location: f1.headers.get('location') }
       } catch (e) {
-        results.test_ipv4_forwarded = { error: e.message }
+        results.live_manual = { error: e.message }
       }
 
-      // Test 2: fetch() with Host header explicitly set
+      // Test 2: liveUrl with follow redirect
       try {
-        const f2 = await fetch(movieUrl, {
-          redirect: 'manual',
+        const f2 = await fetch(liveUrl, {
+          redirect: 'follow',
           headers: {
             'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-            'Host': 'auth.xplist.vip',
           }
         })
-        results.test_host_header = { status: f2.status, location: f2.headers.get('location') }
+        results.live_follow = { status: f2.status, url: f2.url }
       } catch (e) {
-        results.test_host_header = { error: e.message }
+        results.live_follow = { error: e.message }
       }
 
       res.statusCode = 200
