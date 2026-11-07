@@ -21,40 +21,41 @@ export default function handler(req, res) {
     const movieUrl = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
     return (async () => {
       const results = {}
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.headers['x-real-ip'] || '201.17.216.236'
 
-      // Test 1: fetch() with redirect manual
+      // Test 1: fetch() with X-Forwarded-For & X-Real-IP
       try {
-        const f1 = await fetch(movieUrl, { redirect: 'manual', headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' } })
-        const text1 = await f1.text()
-        const h1 = {}
-        f1.headers.forEach((v, k) => { h1[k] = v })
-        results.fetch_manual = { status: f1.status, location: f1.headers.get('location'), headers: h1, body: text1.slice(0, 300) }
-      } catch (e) {
-        results.fetch_manual = { error: e.message }
-      }
-
-      // Test 2: fetch() with redirect follow
-      try {
-        const f2 = await fetch(movieUrl, { redirect: 'follow', headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)', Range: 'bytes=0-100' } })
-        results.fetch_follow = { status: f2.status, url: f2.url }
-      } catch (e) {
-        results.fetch_follow = { error: e.message }
-      }
-
-      // Test 3: http.request with IPTVSmarters
-      try {
-        results.http_request = await new Promise((resolve) => {
-          const tr = http.request(movieUrl, {
-            method: 'GET',
-            headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' }
-          }, (tRes) => {
-            resolve({ status: tRes.statusCode, location: tRes.headers.location })
-          })
-          tr.on('error', (err) => resolve({ error: err.message }))
-          tr.end()
+        const f1 = await fetch(movieUrl, {
+          redirect: 'manual',
+          headers: {
+            'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
+            'X-Forwarded-For': clientIp,
+            'X-Real-IP': clientIp,
+            'CF-Connecting-IP': clientIp,
+          }
         })
+        results.test_forwarded_ip = { status: f1.status, location: f1.headers.get('location') }
       } catch (e) {
-        results.http_request = { error: e.message }
+        results.test_forwarded_ip = { error: e.message }
+      }
+
+      // Test 2: fetch() with curl User-Agent
+      try {
+        const f2 = await fetch(movieUrl, {
+          redirect: 'manual',
+          headers: { 'User-Agent': 'curl/8.4.0' }
+        })
+        results.test_curl_ua = { status: f2.status, location: f2.headers.get('location') }
+      } catch (e) {
+        results.test_curl_ua = { error: e.message }
+      }
+
+      // Test 3: fetch() without headers
+      try {
+        const f3 = await fetch(movieUrl, { redirect: 'manual' })
+        results.test_no_headers = { status: f3.status, location: f3.headers.get('location') }
+      } catch (e) {
+        results.test_no_headers = { error: e.message }
       }
 
       res.statusCode = 200
