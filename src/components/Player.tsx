@@ -179,6 +179,7 @@ export default function Player({
 
   const [streamAttempt, setStreamAttempt] = useState<'m3u8' | 'ts'>('m3u8')
   const [hasAutoTriedExt, setHasAutoTriedExt] = useState(false)
+  const [useFallbackProxy, setUseFallbackProxy] = useState(false)
   const [needsUserGesture, setNeedsUserGesture] = useState(false)
   const [needsUnmute, setNeedsUnmute] = useState(false)
 
@@ -186,6 +187,7 @@ export default function Player({
     setActiveUrl(url)
     setStreamAttempt('m3u8')
     setHasAutoTriedExt(false)
+    setUseFallbackProxy(false)
     setNeedsUserGesture(false)
     setNeedsUnmute(false)
   }, [url])
@@ -633,10 +635,11 @@ export default function Player({
     // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
     let streamUrl = rawUrl.trim().replace(/^https?:/i, (m) => m.toLowerCase())
     if (!Capacitor.isNativePlatform() && !isElectronEnv && /^https?:\/\//i.test(streamUrl)) {
-      streamUrl = buildProxyUrl(streamUrl)
+      streamUrl = buildProxyUrl(streamUrl, { forceLocalProxy: useFallbackProxy })
     }
 
     const tryStartPlayback = (v: HTMLVideoElement) => {
+      if (v.error) return
       const playPromise = v.play()
       if (playPromise !== undefined) {
         playPromise
@@ -647,6 +650,9 @@ export default function Player({
             setNeedsUnmute(false)
           })
           .catch((err) => {
+            if (err?.name === 'NotSupportedError' || err?.name === 'AbortError' || v.error) {
+              return
+            }
             console.warn('Autoplay com som recusado pelo navegador mobile:', err)
             // Tenta imediatamente muted autoplay (permitido por padrão no Chrome Mobile e Safari iOS)
             v.muted = true
@@ -661,6 +667,9 @@ export default function Player({
                   setNeedsUnmute(true)
                 })
                 .catch((err2) => {
+                  if (err2?.name === 'NotSupportedError' || err2?.name === 'AbortError' || v.error) {
+                    return
+                  }
                   console.warn('Autoplay mudo também bloqueado pelo navegador:', err2)
                   setBuffering(false)
                   setPlaying(false)
@@ -676,6 +685,7 @@ export default function Player({
     }
 
     const isHls = (rawUrl.includes('.m3u8') || (isLive && streamAttempt === 'm3u8')) && Hls.isSupported()
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
     if (isHls) {
       hls = new Hls(buildHlsConfig(isLive))
@@ -720,8 +730,12 @@ export default function Player({
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           networkRetryCount++
-          if (networkRetryCount <= 2) {
-            setTimeout(() => hls?.startLoad(), 1000)
+          if (networkRetryCount <= 1) {
+            setTimeout(() => hls?.startLoad(), 800)
+          } else if (!useFallbackProxy) {
+            console.warn('Alternando HLS para proxy de fallback direto...')
+            networkRetryCount = 0
+            setUseFallbackProxy(true)
           } else {
             console.warn('HLS Network Error persistente. Tentando reconectar stream...')
             networkRetryCount = 0
@@ -734,6 +748,10 @@ export default function Player({
           console.warn('HLS erro fatal não recuperável.')
           hls?.destroy()
           hlsRef.current = null
+          if (!useFallbackProxy) {
+            setUseFallbackProxy(true)
+            return
+          }
           if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
             console.warn('Tentando fallback para player nativo da Apple...')
             video.src = streamUrl
@@ -761,14 +779,15 @@ export default function Player({
       } else {
         video.addEventListener('loadedmetadata', onCanPlay, { once: true })
         video.addEventListener('canplay', onCanPlay, { once: true })
-        setTimeout(() => {
-          if (video && video.paused && !playing) {
+        fallbackTimer = setTimeout(() => {
+          if (video && video.paused && !playing && !video.error && video.readyState >= 1) {
             tryStartPlayback(video)
           }
         }, 1200)
       }
     }
     return () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer)
       hls?.destroy()
       hlsRef.current = null
       if (video) {
@@ -780,7 +799,7 @@ export default function Player({
         } catch {}
       }
     }
-  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode])
+  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode, useFallbackProxy])
 
   useEffect(() => {
     if (isNative) {
@@ -1633,6 +1652,16 @@ export default function Player({
                 : activeUrl.replace(/\.mkv$/, '.mp4')
               console.warn(`Formato VOD falhou no início. Tentando alternativo: ${nextUrl}`)
               setActiveUrl(nextUrl)
+              setRetryKey((k) => k + 1)
+              return
+            }
+
+            // 4. Se ainda não tentou o proxy direto local (sem Worker intermediário), faz fallback automático
+            if (!isOfflineLocal && !useFallbackProxy && time.current < 5) {
+              console.warn('Alternando player para rota de proxy direta (fallback)...')
+              setUseFallbackProxy(true)
+              setHasAutoTriedExt(false)
+              setActiveUrl(url)
               setRetryKey((k) => k + 1)
               return
             }

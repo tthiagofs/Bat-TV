@@ -18,12 +18,22 @@ export default function handler(req, res) {
 
   let urlParam = req.query?.url
   if (Array.isArray(urlParam)) urlParam = urlParam[0]
-  if (!urlParam && req.url) {
+  let workerParam = req.query?.worker
+  if (Array.isArray(workerParam)) workerParam = workerParam[0]
+
+  if (req.url) {
     try {
       const parsedReq = new URL(req.url, 'http://localhost')
-      urlParam = parsedReq.searchParams.get('url')
+      if (!urlParam) urlParam = parsedReq.searchParams.get('url')
+      if (!workerParam) workerParam = parsedReq.searchParams.get('worker')
     } catch {}
   }
+
+  const cleanWorker =
+    workerParam && typeof workerParam === 'string' && /^https?:\/\//i.test(workerParam.trim())
+      ? workerParam.trim().replace(/\/+$/, '')
+      : ''
+
   if (!urlParam) {
     res.statusCode = 400
     res.setHeader('Content-Type', 'application/json')
@@ -59,11 +69,44 @@ export default function handler(req, res) {
         { method: clientMethod, headers, agent },
         (proxyRes) => {
           if (
-            [301, 302, 307, 308].includes(proxyRes.statusCode || 0) &&
+            [301, 302, 303, 307, 308].includes(proxyRes.statusCode || 0) &&
             proxyRes.headers.location
           ) {
             proxyRes.resume()
             const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString()
+
+            // Handoff para Cloudflare Worker: resolve o redirecionamento 302 no IPv4 da Vercel
+            // e redireciona o navegador para o Cloudflare Worker transmitir o vídeo da URL final (/vauth/, /rauth/)
+            if (cleanWorker) {
+              let shouldHandoff = false
+              try {
+                const origHost = new URL(urlParam).hostname.toLowerCase()
+                const nextU = new URL(redirectUrl)
+                const nextHost = nextU.hostname.toLowerCase()
+                if (
+                  nextHost !== origHost ||
+                  nextU.pathname.includes('/vauth/') ||
+                  nextU.pathname.includes('/rauth/')
+                ) {
+                  shouldHandoff = true
+                }
+              } catch {
+                shouldHandoff = true
+              }
+
+              if (shouldHandoff) {
+                const workerStreamUrl = `${cleanWorker}/?url=${encodeURIComponent(redirectUrl)}`
+                res.statusCode = 302
+                res.setHeader('Access-Control-Allow-Origin', '*')
+                res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+                res.setHeader('Access-Control-Allow-Headers', '*')
+                res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Location')
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+                res.setHeader('Location', workerStreamUrl)
+                return res.end()
+              }
+            }
+
             return fetchWithRedirects(redirectUrl, maxRedirects - 1)
           }
 
@@ -125,6 +168,9 @@ export default function handler(req, res) {
               const host = req.headers['x-forwarded-host'] || req.headers.host
               const proto = req.headers['x-forwarded-proto'] || 'https'
               const origin = host ? `${proto}://${host}` : ''
+              const proxyBaseUrl = cleanWorker
+                ? `${cleanWorker}/?url=`
+                : `${origin}/api/proxy?url=`
 
               const rewritten = manifestText
                 .split('\n')
@@ -137,7 +183,7 @@ export default function handler(req, res) {
                     l = l.replace(/URI=["']?([^"',>\s]+)["']?/g, (_, uri) => {
                       try {
                         const absUrl = new URL(uri, targetUrl).toString()
-                        return `URI="${origin}/api/proxy?url=${encodeURIComponent(absUrl)}"`
+                        return `URI="${proxyBaseUrl}${encodeURIComponent(absUrl)}"`
                       } catch {
                         return `URI="${uri}"`
                       }
@@ -151,7 +197,7 @@ export default function handler(req, res) {
                   // 3. Linhas de segmentos (.ts) ou sub-playlists (.m3u8)
                   try {
                     const absUrl = new URL(l, targetUrl).toString()
-                    return `${origin}/api/proxy?url=${encodeURIComponent(absUrl)}`
+                    return `${proxyBaseUrl}${encodeURIComponent(absUrl)}`
                   } catch {
                     return line
                   }

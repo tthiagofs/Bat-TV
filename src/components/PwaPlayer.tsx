@@ -178,6 +178,7 @@ export default function PwaPlayer({
   const [retryKey, setRetryKey] = useState(0)
   const [streamAttempt, setStreamAttempt] = useState<'m3u8' | 'ts'>('m3u8')
   const [hasAutoTriedExt, setHasAutoTriedExt] = useState(false)
+  const [useFallbackProxy, setUseFallbackProxy] = useState(false)
   const [needsUserGesture, setNeedsUserGesture] = useState(false)
   const [needsUnmute, setNeedsUnmute] = useState(true)
 
@@ -185,6 +186,7 @@ export default function PwaPlayer({
     setActiveUrl(url)
     setStreamAttempt('m3u8')
     setHasAutoTriedExt(false)
+    setUseFallbackProxy(false)
     setNeedsUserGesture(false)
     setNeedsUnmute(true)
   }, [url])
@@ -635,10 +637,11 @@ export default function PwaPlayer({
     // No navegador web (Safari/Chrome/Vercel), usa proxy para contornar Mixed Content (HTTP em HTTPS) e CORS.
     let streamUrl = rawUrl.trim().replace(/^https?:/i, (m) => m.toLowerCase())
     if (!Capacitor.isNativePlatform() && !isElectronEnv && /^https?:\/\//i.test(streamUrl)) {
-      streamUrl = buildProxyUrl(streamUrl)
+      streamUrl = buildProxyUrl(streamUrl, { forceLocalProxy: useFallbackProxy })
     }
 
     const tryStartPlayback = (v: HTMLVideoElement) => {
+      if (v.error) return
       v.muted = true
       setMuted(true)
       const playPromise = v.play()
@@ -650,7 +653,10 @@ export default function PwaPlayer({
             setNeedsUserGesture(false)
             setNeedsUnmute(true)
           })
-          .catch(() => {
+          .catch((err) => {
+            if (err?.name === 'NotSupportedError' || err?.name === 'AbortError' || v.error) {
+              return
+            }
             v.muted = true
             setMuted(true)
             const mutedPromise = v.play()
@@ -662,7 +668,10 @@ export default function PwaPlayer({
                   setNeedsUserGesture(false)
                   setNeedsUnmute(true)
                 })
-                .catch(() => {
+                .catch((err2) => {
+                  if (err2?.name === 'NotSupportedError' || err2?.name === 'AbortError' || v.error) {
+                    return
+                  }
                   setBuffering(false)
                   setPlaying(false)
                   setNeedsUserGesture(true)
@@ -721,8 +730,12 @@ export default function PwaPlayer({
         }
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           networkRetryCount++
-          if (networkRetryCount <= 2) {
-            setTimeout(() => hls?.startLoad(), 1000)
+          if (networkRetryCount <= 1) {
+            setTimeout(() => hls?.startLoad(), 800)
+          } else if (!useFallbackProxy) {
+            console.warn('Alternando HLS do PWA para proxy de fallback direto...')
+            networkRetryCount = 0
+            setUseFallbackProxy(true)
           } else {
             console.warn('HLS Network Error persistente. Tentando reconectar stream...')
             networkRetryCount = 0
@@ -735,6 +748,10 @@ export default function PwaPlayer({
           console.warn('HLS erro fatal não recuperável.')
           hls?.destroy()
           hlsRef.current = null
+          if (!useFallbackProxy) {
+            setUseFallbackProxy(true)
+            return
+          }
           if (video && video.canPlayType('application/vnd.apple.mpegurl')) {
             console.warn('Tentando fallback para player nativo da Apple...')
             video.src = streamUrl
@@ -778,7 +795,7 @@ export default function PwaPlayer({
         } catch {}
       }
     }
-  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode])
+  }, [activeUrl, isLive, retryKey, streamAttempt, isNative, startAt, isSeries, onNextEpisode, useFallbackProxy])
 
   useEffect(() => {
     if (isNative) {
@@ -1673,6 +1690,16 @@ export default function PwaPlayer({
                 : activeUrl.replace(/\.mkv$/, '.mp4')
               console.warn(`Formato VOD falhou no início. Tentando alternativo: ${nextUrl}`)
               setActiveUrl(nextUrl)
+              setRetryKey((k) => k + 1)
+              return
+            }
+
+            // 4. Se ainda não tentou o proxy direto local (sem Worker intermediário), faz fallback automático
+            if (!isOfflineLocal && !useFallbackProxy && time.current < 5) {
+              console.warn('Alternando player do PWA para rota de proxy direta (fallback)...')
+              setUseFallbackProxy(true)
+              setHasAutoTriedExt(false)
+              setActiveUrl(url)
               setRetryKey((k) => k + 1)
               return
             }

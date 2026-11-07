@@ -406,6 +406,25 @@ class DownloadManager {
           } catch {}
         }
 
+        if (!probeRes.ok && probeRes.status !== 206) {
+          const fallbackProxyUrl = buildProxyUrl(targetUrl, { forceLocalProxy: true })
+          try {
+            const fallbackProbe = await fetch(fallbackProxyUrl, {
+              method: 'GET',
+              headers: { Range: 'bytes=0-1023' },
+              signal,
+            })
+            if (fallbackProbe.ok || fallbackProbe.status === 206) {
+              proxyUrl = fallbackProxyUrl
+              probeRes = fallbackProbe
+            }
+          } catch {}
+        }
+
+        if ((probeRes.ok || probeRes.status === 206) && probeRes.url && /^https?:\/\//i.test(probeRes.url)) {
+          proxyUrl = probeRes.url
+        }
+
         if (probeRes.status === 206) {
           supportsRange = true
           const contentRange = probeRes.headers.get('content-range')

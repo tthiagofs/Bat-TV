@@ -9,7 +9,14 @@ function iptvDevProxy(): Plugin {
     name: 'iptv-dev-proxy',
     configureServer(server) {
       server.middlewares.use('/iptv-proxy', (req, res) => {
-        const urlParam = new URL(req.url || '', 'http://localhost').searchParams.get('url')
+        const parsedReq = new URL(req.url || '', 'http://localhost')
+        const urlParam = parsedReq.searchParams.get('url')
+        const workerParam = parsedReq.searchParams.get('worker')
+        const cleanWorker =
+          workerParam && /^https?:\/\//i.test(workerParam.trim())
+            ? workerParam.trim().replace(/\/+$/, '')
+            : ''
+
         if (!urlParam) {
           res.statusCode = 400
           res.end(JSON.stringify({ error: 'URL param required' }))
@@ -39,10 +46,43 @@ function iptvDevProxy(): Plugin {
               { headers },
               (proxyRes) => {
                 if (
-                  [301, 302, 307, 308].includes(proxyRes.statusCode || 0) &&
+                  [301, 302, 303, 307, 308].includes(proxyRes.statusCode || 0) &&
                   proxyRes.headers.location
                 ) {
+                  proxyRes.resume()
                   const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString()
+
+                  if (cleanWorker) {
+                    let shouldHandoff = false
+                    try {
+                      const origHost = new URL(urlParam).hostname.toLowerCase()
+                      const nextU = new URL(redirectUrl)
+                      const nextHost = nextU.hostname.toLowerCase()
+                      if (
+                        nextHost !== origHost ||
+                        nextU.pathname.includes('/vauth/') ||
+                        nextU.pathname.includes('/rauth/')
+                      ) {
+                        shouldHandoff = true
+                      }
+                    } catch {
+                      shouldHandoff = true
+                    }
+
+                    if (shouldHandoff) {
+                      const workerStreamUrl = `${cleanWorker}/?url=${encodeURIComponent(redirectUrl)}`
+                      res.statusCode = 302
+                      res.setHeader('Access-Control-Allow-Origin', '*')
+                      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+                      res.setHeader('Access-Control-Allow-Headers', '*')
+                      res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Location')
+                      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+                      res.setHeader('Location', workerStreamUrl)
+                      res.end()
+                      return
+                    }
+                  }
+
                   fetchWithRedirects(redirectUrl, maxRedirects - 1)
                   return
                 }
