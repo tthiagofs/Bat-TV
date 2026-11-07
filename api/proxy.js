@@ -25,7 +25,10 @@ export default function handler(req, res) {
       // Test 1: fetch() with redirect manual
       try {
         const f1 = await fetch(movieUrl, { redirect: 'manual', headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' } })
-        results.fetch_manual = { status: f1.status, location: f1.headers.get('location') }
+        const text1 = await f1.text()
+        const h1 = {}
+        f1.headers.forEach((v, k) => { h1[k] = v })
+        results.fetch_manual = { status: f1.status, location: f1.headers.get('location'), headers: h1, body: text1.slice(0, 300) }
       } catch (e) {
         results.fetch_manual = { error: e.message }
       }
