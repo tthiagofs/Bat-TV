@@ -16,40 +16,6 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
-  let isDiag = req.query?.diag
-  if (!isDiag && req.url) {
-    try {
-      const parsedReq = new URL(req.url, 'http://localhost')
-      isDiag = parsedReq.searchParams.get('diag')
-    } catch {}
-  }
-
-  if (isDiag) {
-    const target = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
-    const uas = [
-      'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'VLC/3.0.18 LibVLC/3.0.18',
-      'ExoPlayerLib/2.18.1',
-      'Lavf/58.29.100',
-      'okhttp/4.9.0'
-    ]
-    const results = {}
-    for (const ua of uas) {
-      try {
-        const r = await fetch(target, {
-          redirect: 'manual',
-          headers: { 'User-Agent': ua }
-        })
-        results[ua] = { status: r.status, location: r.headers.get('location') }
-      } catch (e) {
-        results[ua] = { error: e.message }
-      }
-    }
-    res.setHeader('Content-Type', 'application/json')
-    return res.end(JSON.stringify(results, null, 2))
-  }
-
   let urlParam = req.query?.url
   if (Array.isArray(urlParam)) urlParam = urlParam[0]
   let workerParam = req.query?.worker
