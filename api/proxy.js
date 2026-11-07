@@ -34,14 +34,20 @@ export default function handler(req, res) {
 
   if (req.query?.diag || (req.url && req.url.includes('diag=1'))) {
     const testUrl = urlParam || 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const clientIp = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || '189.6.12.34').split(',')[0].trim()
     const diagHeaders = {
       'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
       Accept: '*/*',
+      'X-Forwarded-For': clientIp,
+      'X-Real-IP': clientIp,
+      'CF-Connecting-IP': clientIp,
+      'True-Client-IP': clientIp,
     }
     const client = testUrl.startsWith('https') ? https : http
     const dReq = client.request(testUrl, { method: 'GET', headers: diagHeaders }, (dRes) => {
       const loc = dRes.headers.location
       const result = {
+        clientIpUsed: clientIp,
         step1: {
           url: testUrl,
           status: dRes.statusCode,
