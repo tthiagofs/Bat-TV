@@ -16,7 +16,15 @@ export default async function handler(req, res) {
     return res.status(200).end()
   }
 
-  if (req.query?.diag) {
+  let isDiag = req.query?.diag
+  if (!isDiag && req.url) {
+    try {
+      const parsedReq = new URL(req.url, 'http://localhost')
+      isDiag = parsedReq.searchParams.get('diag')
+    } catch {}
+  }
+
+  if (isDiag) {
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || '201.17.216.236'
     const targetMovie = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
     const results = {}
