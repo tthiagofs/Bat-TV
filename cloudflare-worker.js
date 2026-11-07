@@ -11,8 +11,8 @@
 function normalizeUrlForCloudflare(rawUrl) {
   try {
     const u = new URL(rawUrl)
-    // Se o host for um IP numérico direto (ex: 79.127.148.162), converte para hostname compatível (nip.io)
-    // Isso evita o bloqueio de segurança "error code: 1003 (Direct IP Access Not Allowed)" da Cloudflare
+    // Se o host for um IP numérico direto (ex: 89.222.120.168), converte para hostname compatível (.nip.io)
+    // Isso evita o bloqueio "error code: 1003 (Direct IP Access Not Allowed)" da Cloudflare
     if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(u.hostname)) {
       u.hostname = u.hostname + '.nip.io'
       return u.toString()
@@ -24,7 +24,7 @@ function normalizeUrlForCloudflare(rawUrl) {
 async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
   let curUrl = normalizeUrlForCloudflare(initialUrl)
   let redirects = 0
-  const maxRedirects = 8
+  const maxRedirects = 6
 
   while (redirects < maxRedirects) {
     let res
@@ -34,12 +34,13 @@ async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
         headers: headers,
         redirect: 'manual',
       })
-    } catch {
+    } catch (err) {
       break
     }
 
+    // Intercepta qualquer redirecionamento 3xx
     if ([301, 302, 303, 307, 308].includes(res.status)) {
-      const loc = res.headers.get('location')
+      const loc = res.headers.get('location') || res.headers.get('Location')
       if (loc) {
         const nextUrl = new URL(loc, curUrl).toString()
         curUrl = normalizeUrlForCloudflare(nextUrl)
@@ -48,17 +49,11 @@ async function fetchWithSmartRedirects(initialUrl, requestMethod, headers) {
       }
     }
 
-    // Se for opaqueredirect (status 0) do Cloudflare sem a flag redirect_manual, sai para o fallback 'follow'
-    if (res.status === 0 || res.type === 'opaqueredirect') {
-      break
-    }
-
     return { response: res, finalUrl: curUrl }
   }
 
-  // Fallback seguro caso o runtime retorne status 0 em manual redirect
-  const res = await fetch(curUrl, { method: requestMethod, headers, redirect: 'follow' })
-  return { response: res, finalUrl: curUrl }
+  const fallback = await fetch(curUrl, { method: requestMethod, headers, redirect: 'manual' })
+  return { response: fallback, finalUrl: curUrl }
 }
 
 export default {
@@ -104,6 +99,23 @@ export default {
       // 3. Executa a requisição até o servidor IPTV resolvendo redirecionamentos para IPs
       const reqMethod = request.method === 'HEAD' ? 'HEAD' : 'GET'
       const { response: originResponse, finalUrl } = await fetchWithSmartRedirects(targetUrl, reqMethod, fetchHeaders)
+
+      // Se a resposta ainda for um redirect 3xx não seguido, redireciona o navegador pelo próprio Worker
+      if ([301, 302, 303, 307, 308].includes(originResponse.status)) {
+        const loc = originResponse.headers.get('location') || originResponse.headers.get('Location')
+        if (loc) {
+          const absUrl = normalizeUrlForCloudflare(new URL(loc, finalUrl).toString())
+          const workerOrigin = `${workerUrl.origin}${workerUrl.pathname}`
+          return new Response(null, {
+            status: 302,
+            headers: {
+              'Location': `${workerOrigin}?url=${encodeURIComponent(absUrl)}`,
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Headers': '*',
+            }
+          })
+        }
+      }
 
       const contentType = originResponse.headers.get('content-type') || 'application/octet-stream'
       const isM3u8 =

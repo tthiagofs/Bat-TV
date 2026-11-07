@@ -10,14 +10,7 @@ const STORAGE_KEY = 'iptv-rea:custom-proxy'
 export function getCustomProxy(): string {
   if (typeof window === 'undefined') return ''
   try {
-    const saved = (localStorage.getItem(STORAGE_KEY) || '').trim()
-    // Se o usuário tiver salvo o worker antigo que estava com erro 500 (bat-tv-proxy.thiagofelipefreire.workers.dev),
-    // remove automaticamente para restaurar a reprodução imediata via proxy Vercel
-    if (saved && saved.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')) {
-      localStorage.removeItem(STORAGE_KEY)
-      return ''
-    }
-    return saved
+    return (localStorage.getItem(STORAGE_KEY) || '').trim()
   } catch {
     return ''
   }
@@ -46,16 +39,11 @@ export function getProxyEndpoint(forceLocal = false): string {
   if (!forceLocal) {
     // 1. Prioridade 1: Proxy customizado salvo no navegador (se configurado pelo usuário)
     const custom = getCustomProxy()
-    if (custom && !custom.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')) return custom
+    if (custom) return custom
 
     // 2. Prioridade 2: Variável de ambiente VITE_PROXY_URL configurada na Vercel (.env)
     const envProxy = import.meta.env.VITE_PROXY_URL
-    if (
-      envProxy &&
-      typeof envProxy === 'string' &&
-      envProxy.trim() &&
-      !envProxy.includes('bat-tv-proxy.thiagofelipefreire.workers.dev')
-    ) {
+    if (envProxy && typeof envProxy === 'string' && envProxy.trim()) {
       return envProxy.trim().replace(/\/+$/, '')
     }
   }
