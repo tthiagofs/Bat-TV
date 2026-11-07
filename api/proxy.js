@@ -25,26 +25,26 @@ export default async function handler(req, res) {
   }
 
   if (isDiag) {
-    const targetLive = 'http://auth.xplist.vip/live/thiagofelipe038/r56k25jame/194567.m3u8'
-    const targetMovie = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const target = 'http://auth.xplist.vip/movie/thiagofelipe038/r56k25jame/1038017.mp4'
+    const uas = [
+      'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'VLC/3.0.18 LibVLC/3.0.18',
+      'ExoPlayerLib/2.18.1',
+      'Lavf/58.29.100',
+      'okhttp/4.9.0'
+    ]
     const results = {}
-    try {
-      const rLive = await fetch(targetLive, {
-        redirect: 'manual',
-        headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' }
-      })
-      results.live = { status: rLive.status, location: rLive.headers.get('location'), body: await rLive.text() }
-    } catch (e) {
-      results.live = { error: e.message }
-    }
-    try {
-      const rMovie = await fetch(targetMovie, {
-        redirect: 'manual',
-        headers: { 'User-Agent': 'IPTVSmarters/1.0.0 (Linux; Android 10; Fire TV)' }
-      })
-      results.movie = { status: rMovie.status, location: rMovie.headers.get('location'), body: await rMovie.text() }
-    } catch (e) {
-      results.movie = { error: e.message }
+    for (const ua of uas) {
+      try {
+        const r = await fetch(target, {
+          redirect: 'manual',
+          headers: { 'User-Agent': ua }
+        })
+        results[ua] = { status: r.status, location: r.headers.get('location') }
+      } catch (e) {
+        results[ua] = { error: e.message }
+      }
     }
     res.setHeader('Content-Type', 'application/json')
     return res.end(JSON.stringify(results, null, 2))
