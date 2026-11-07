@@ -181,8 +181,30 @@ export class XtreamService {
       if (res.ok) {
         return (await res.json()) as T
       }
-    } catch {
-      // Se não houver proxy, tenta fetch direto
+
+      // Se o servidor IPTV respondeu com erro (401, 403, etc), lê a mensagem real retornada pelo painel
+      let errorMsg = ''
+      try {
+        const errorJson = await res.json()
+        if (errorJson?.message) errorMsg = errorJson.message
+      } catch {}
+
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(errorMsg ? `Servidor IPTV: ${errorMsg}` : 'Credenciais inválidas ou lista expirada/suspensa.')
+      }
+      if (errorMsg) {
+        throw new Error(`Servidor IPTV: ${errorMsg}`)
+      }
+    } catch (err: any) {
+      if (err?.message && (err.message.includes('Servidor IPTV') || err.message.includes('Credenciais') || err.message.includes('Banned'))) {
+        throw err
+      }
+    }
+
+    // Se estiver em ambiente HTTPS e a URL for HTTP, não tenta fetch direto para não poluir o console com Mixed Content
+    const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:'
+    if (isHttpsPage && fullUrl.startsWith('http:')) {
+      throw new Error(`Não foi possível autenticar no servidor "${this.base}". Verifique se o usuário e senha estão corretos e ativos no provedor.`)
     }
 
     const controller = new AbortController()
